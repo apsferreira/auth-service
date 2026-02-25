@@ -1,0 +1,157 @@
+# .cursorrules - Auth Service Project
+
+## 🎯 PROJETO
+
+**Nome:** Auth Service  
+**Objetivo:** Microserviço centralizado de autenticação e autorização  
+**Stack:** Go 1.21+ + Fiber v2 + PostgreSQL 15+ + JWT
+
+---
+
+## 📚 PRINCÍPIOS
+
+### **Clean Architecture:**
+```
+cmd/api/          → Entry point (main.go)
+internal/domain/  → Entities (User, Tenant, Role, Permission)
+internal/repository/ → Data access (interfaces + PostgreSQL impl)
+internal/service/ → Business logic
+internal/handler/ → HTTP handlers (Fiber)
+internal/middleware/ → Auth, CORS, Logger
+```
+
+### **Regras:**
+- ✅ Domain NEVER imports infrastructure
+- ✅ Service receives Repository INTERFACE
+- ✅ Handler receives Service
+- ✅ Use context.Context everywhere
+- ❌ NO business logic in handlers
+- ❌ NO SQL in service layer
+
+---
+
+## 🏗️ ARQUITETURA
+
+### **Multi-Service:**
+- Auth Service é um microserviço SEPARADO
+- Outros serviços (MyLibrary, etc.) CONSUMEM o Auth
+- Banco PostgreSQL separado (auth_db na porta 5433)
+
+### **JWT:**
+- Access token: 15 minutos (HS256)
+- Refresh token: 7 dias (armazenado no DB)
+- Rotação de refresh token
+
+### **RBAC:**
+- Roles hierárquicos (level 3-10)
+- Permissões granulares (resource + action)
+- Múltiplas roles por usuário
+
+---
+
+## 🔐 SEGURANÇA (MANDATÓRIO)
+
+### **Secrets:**
+```bash
+# ❌ NEVER commit
+.env
+JWT_SECRET em código
+
+# ✅ ALWAYS use
+.env.example
+environment variables
+```
+
+### **Password Hashing:**
+```go
+// ✅ ALWAYS use bcrypt
+hashed, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+
+// ❌ NEVER plain text
+```
+
+### **SQL Injection:**
+```go
+// ❌ BAD
+db.Exec("SELECT * FROM users WHERE email = '" + email + "'")
+
+// ✅ GOOD
+db.Query("SELECT * FROM users WHERE email = $1", email)
+```
+
+---
+
+## 📝 CONVENÇÕES
+
+### **Commits (Conventional Commits):**
+```bash
+git commit -m "feat(auth): add login endpoint"
+git commit -m "fix(jwt): correct token expiration"
+git commit -m "docs:i update API documentation"
+```
+
+### **Nomes:**
+```go
+// ✅ GOOD
+type User struct { ... }
+func GetUserByID(id uuid.UUID) (*User, error)
+var userService *UserService
+
+// ❌ BAD
+type user struct { ... }
+func get_user_by_id(id uuid.UUID) { ... }
+```
+
+---
+
+## 🧪 TESTES
+
+### **Cobertura mínima:** 80%
+
+### **O que testar:**
+- ✅ Unit tests: Services, utilities
+- ✅ Integration tests: HTTP endpoints
+- ✅ Security: JWT generation/validation
+
+---
+
+## 🚀 DEPLOYMENT
+
+### **Docker:**
+- Multi-stage build (builder + runtime)
+- PostgreSQL na porta 5433
+- API na porta 3002
+
+### **Environment:**
+```env
+DATABASE_URL=postgres://...
+JWT_SECRET=secret-key
+JWT_ACCESS_EXPIRY=15m
+JWT_REFRESH_EXPIRY=168h
+PORT=3002
+```
+
+---
+
+## 🆘 CONTEXT
+
+Para entender melhor o projeto:
+1. **Leia:** `docs/CONTEXT.md`
+2. **Consulte:** `docs/API.md`
+3. **Veja:** `README.md`
+
+---
+
+## 📞 NOTAS
+
+- Este é um **microserviço separado**
+- MyLibrary e outros serviços **CONSUMEM** o Auth
+- Mock data incluído para testes
+- Seed data: admin@apsferreira.com / admin123
+
+---
+
+**Última atualização:** 2025-01-22  
+**Version:** 1.0  
+**Status:** 🟢 Active
+

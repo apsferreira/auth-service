@@ -1,0 +1,101 @@
+package service
+
+import (
+	"crypto/rand"
+	"fmt"
+	"math/big"
+	"time"
+
+	"github.com/apsferreira/auth-service/backend/internal/domain"
+	"github.com/apsferreira/auth-service/backend/internal/repository"
+	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
+)
+
+type OTPService struct {
+	otpRepo       *repository.OTPRepository
+	expiryMinutes int
+	maxAttempts   int
+	rateLimit     int
+	rateWindow    time.Duration
+}
+
+func NewOTPService(otpRepo *repository.OTPRepository, expiryMinutes, maxAttempts, rateLimit, rateWindowMinutes int) *OTPService {
+	return &OTPService{
+		otpRepo:       otpRepo,
+		expiryMinutes: expiryMinutes,
+		maxAttempts:   maxAttempts,
+		rateLimit:     rateLimit,
+		rateWindow:    time.Duration(rateWindowMinutes) * time.Minute,
+	}
+}
+
+// GenerateAndStore creates a 6-digit OTP, bcrypt-hashes it, stores in DB, returns the plain code.
+func (s *OTPService) GenerateAndStore(email string) (string, error) {
+	count, err := s.otpRepo.CountRecentByEmail(email, time.Now().Add(-s.rateWindow))
+	if err != nil {
+		return "", fmt.Errorf("failed to check rate limit: %w", err)
+	}
+	if count >= s.rateLimit {
+		return "", fmt.Errorf("rate limit exceeded: max %d OTP requests per %d minutes", s.rateLimit, int(s.rateWindow.Minutes()))
+	}
+
+	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
+	if err != nil {
+		return "", fmt.Errorf("failed to generate OTP: %w", err)
+	}
+	code := fmt.Sprintf("%06d", n.Int64())
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(code), bcrypt.DefaultCost)
+	if err != nil {
+		return "", fmt.Errorf("failed to hash OTP: %w", err)
+	}
+
+	otp := &domain.OTPCode{
+		ID:        uuid.New(),
+		Email:     email,
+		CodeHash:  string(hash),
+		Channel:   "email",
+		Attempts:  0,
+		ExpiresAt: time.Now().Add(time.Duration(s.expiryMinutes) * time.Minute),
+		CreatedAt: time.Now(),
+	}
+
+	if err := s.otpRepo.Create(otp); err != nil {
+		return "", fmt.Errorf("failed to store OTP: %w", err)
+	}
+
+	return code, nil
+}
+
+// Verify checks a code against the stored OTP for an email.
+func (s *OTPService) Verify(email, code string) error {
+	otp, err := s.otpRepo.FindLatestByEmail(email)
+	if err != nil {
+		return fmt.Errorf("no valid OTP found for this email")
+	}
+
+	if otp.Attempts >= s.maxAttempts {
+		return fmt.Errorf("maximum verification attempts exceeded")
+	}
+
+	// Increment attempts before checking (prevents timing attacks)
+	_ = s.otpRepo.IncrementAttempts(otp.ID)
+
+	if time.Now().After(otp.ExpiresAt) {
+		return fmt.Errorf("OTP has expired")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(otp.CodeHash), []byte(code)); err != nil {
+		return fmt.Errorf("invalid OTP code")
+	}
+
+	// Cleanup: delete all OTPs for this email
+	_ = s.otpRepo.DeleteByEmail(email)
+
+	return nil
+}
+
+func (s *OTPService) GetExpiryMinutes() int {
+	return s.expiryMinutes
+}

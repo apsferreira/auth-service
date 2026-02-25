@@ -1,0 +1,60 @@
+## Auth Service - Docker Compose
+## Requires: shared-infra (postgres + redis) running first
+## Start with: cd ../shared-infra && docker compose up -d
+
+services:
+  auth-api:
+    build: ./backend
+    container_name: auth-api
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@shared-postgres:5432/auth_db?sslmode=disable
+      JWT_SECRET: your-secret-key-change-in-production
+      JWT_ACCESS_EXPIRY: 15m
+      JWT_REFRESH_EXPIRY: 168h
+      PORT: "3010"
+      ENV: development
+      ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3003,http://localhost:3005,http://localhost:3010,http://localhost:5173,http://localhost:8080"
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-auth@yourdomain.com}
+      OTP_EXPIRY_MINUTES: 10
+      OTP_MAX_ATTEMPTS: 3
+      OTP_RATE_LIMIT_PER_EMAIL: 3
+      OTP_RATE_LIMIT_WINDOW_MINUTES: 15
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-service-secret-change-in-production}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      WHATSAPP_API_URL: http://shared-evolution-api:8080
+      WHATSAPP_API_KEY: ${WHATSAPP_API_KEY:-evolution-homelab-secret}
+      WHATSAPP_INSTANCE: ${WHATSAPP_INSTANCE:-auth-service}
+      WHATSAPP_DEFAULT_PHONE: ${WHATSAPP_DEFAULT_PHONE:-}
+    ports:
+      - "3010:3010"
+    volumes:
+      - ./backend:/app
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:3010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - shared-infra
+    restart: unless-stopped
+
+  auth-frontend:
+    build: ./frontend
+    container_name: auth-frontend
+    ports:
+      - "3003:80"
+    depends_on:
+      auth-api:
+        condition: service_healthy
+    networks:
+      - shared-infra
+    restart: unless-stopped
+
+networks:
+  shared-infra:
+    external: true
