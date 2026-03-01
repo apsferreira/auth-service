@@ -37,6 +37,9 @@ func (h *AuthHandler) RequestOTP(c *fiber.Ctx) error {
 		if strings.Contains(err.Error(), "rate limit") {
 			return c.Status(429).JSON(domain.ErrorResponse{Error: err.Error()})
 		}
+		if strings.Contains(err.Error(), "não está configurado") {
+			return c.Status(400).JSON(domain.ErrorResponse{Error: err.Error()})
+		}
 		return c.Status(500).JSON(domain.ErrorResponse{Error: err.Error()})
 	}
 
