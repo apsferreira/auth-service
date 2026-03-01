@@ -2,6 +2,10 @@
 # IngressRoute — Auth Service
 # Traefik v3 + Cloudflare Tunnel
 # TLS terminado no Cloudflare (sem certResolver no IngressRoute)
+#
+# Segurança:
+#   auth.institutoitinerante.com.br       → API pública (OTP, login)
+#   admin-auth.institutoitinerante.com.br → Frontend admin (protegido por Cloudflare Access)
 # =============================================================================
 
 # Backend API: auth.institutoitinerante.com.br
@@ -20,3 +24,22 @@ spec:
       services:
         - name: authservice-backend
           port: 3010
+
+---
+# Frontend Admin: admin-auth.institutoitinerante.com.br
+# Protegido por Cloudflare Access (autenticação obrigatória antes de chegar aqui)
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: authservice-frontend
+  namespace: production
+spec:
+  entryPoints:
+    - web
+    - websecure
+  routes:
+    - match: Host(`admin-auth.institutoitinerante.com.br`)
+      kind: Rule
+      services:
+        - name: authservice-frontend
+          port: 80

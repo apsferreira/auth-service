@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: authservice-frontend
+  namespace: production
+  labels:
+    app: authservice-frontend
+spec:
+  selector:
+    app: authservice-frontend
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+  type: ClusterIP

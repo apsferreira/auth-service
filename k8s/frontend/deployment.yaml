@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authservice-frontend
+  namespace: production
+  labels:
+    app: authservice-frontend
+    version: v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: authservice-frontend
+  template:
+    metadata:
+      labels:
+        app: authservice-frontend
+        version: v1
+    spec:
+      containers:
+      - name: frontend
+        image: ghcr.io/apsferreira/auth-service-frontend:latest
+        # Tag atualizada pelo CI (GitHub Actions) a cada push para main
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5

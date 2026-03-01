@@ -18,6 +18,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_BACKEND: ghcr.io/apsferreira/auth-service-backend
+  IMAGE_FRONTEND: ghcr.io/apsferreira/auth-service-frontend
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -77,12 +78,67 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ---------------------------------------------------------------------------
+  # CI: Build do Frontend Admin (React/Vite)
+  # ---------------------------------------------------------------------------
+  build-frontend:
+    name: Build Frontend Admin
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get short SHA
+        id: sha
+        run: echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install deps e build
+        working-directory: frontend
+        run: |
+          npm ci
+          npx vite build
+
+      - name: Setup Buildx
+        if: github.event_name == 'push'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build e Push Frontend Image
+        if: github.event_name == 'push'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ env.IMAGE_FRONTEND }}:latest
+            ${{ env.IMAGE_FRONTEND }}:sha-${{ steps.sha.outputs.short }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------------------
   # CD: Atualiza K8s manifests com a nova tag (GitOps)
   # ---------------------------------------------------------------------------
   update-manifests:
     name: Update K8s Manifests
     runs-on: ubuntu-latest
-    needs: [build-backend]
+    needs: [build-backend, build-frontend]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       contents: write
@@ -102,10 +158,15 @@ jobs:
           sed -i "s|${{ env.IMAGE_BACKEND }}:.*|${{ env.IMAGE_BACKEND }}:sha-${{ steps.sha.outputs.short }}|g" \
             k8s/backend/deployment.yaml
 
+      - name: Update Frontend image tag
+        run: |
+          sed -i "s|${{ env.IMAGE_FRONTEND }}:.*|${{ env.IMAGE_FRONTEND }}:sha-${{ steps.sha.outputs.short }}|g" \
+            k8s/frontend/deployment.yaml
+
       - name: Commit e Push manifests atualizados
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add k8s/backend/deployment.yaml
-          git diff --staged --quiet || git commit -m "chore(k8s): atualiza imagem para sha-${{ steps.sha.outputs.short }} [skip ci]"
+          git add k8s/backend/deployment.yaml k8s/frontend/deployment.yaml
+          git diff --staged --quiet || git commit -m "chore(k8s): atualiza imagens para sha-${{ steps.sha.outputs.short }} [skip ci]"
           git push
