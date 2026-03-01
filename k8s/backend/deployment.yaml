@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authservice-backend
+  namespace: production
+  labels:
+    app: authservice-backend
+    version: v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: authservice-backend
+  template:
+    metadata:
+      labels:
+        app: authservice-backend
+        version: v1
+    spec:
+      containers:
+      - name: backend
+        image: ghcr.io/apsferreira/auth-service-backend:latest
+        # Tag atualizada pelo CI (GitHub Actions) a cada push para main
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3010
+          name: http
+        env:
+        - name: ENV
+          value: "production"
+        - name: PORT
+          value: "3010"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: authservice-secrets
+              key: database-url
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: authservice-secrets
+              key: jwt-secret
+        - name: RESEND_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: authservice-secrets
+              key: resend-api-key
+        - name: RESEND_FROM_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: authservice-secrets
+              key: resend-from-email
+        - name: ALLOWED_ORIGINS
+          value: "https://biblioteca.institutoitinerante.com.br,https://focus-hub.institutoitinerante.com.br,https://auth.institutoitinerante.com.br"
+        - name: JWT_ACCESS_EXPIRY
+          value: "15m"
+        - name: JWT_REFRESH_EXPIRY
+          value: "168h"
+        - name: OTP_EXPIRY_MINUTES
+          value: "10"
+        - name: SERVICE_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: authservice-secrets
+              key: service-token
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "300m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3010
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3010
+          initialDelaySeconds: 10
+          periodSeconds: 5
