@@ -169,4 +169,5 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git add k8s/backend/deployment.yaml k8s/frontend/deployment.yaml
           git diff --staged --quiet || git commit -m "chore(k8s): atualiza imagens para sha-${{ steps.sha.outputs.short }} [skip ci]"
+          git pull --rebase origin main
           git push
