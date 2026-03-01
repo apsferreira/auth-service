@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: ghcr.io/apsferreira/auth-service-backend:sha-9308f2c
+        image: ghcr.io/apsferreira/auth-service-backend:sha-8878665
         # Tag atualizada pelo CI (GitHub Actions) a cada push para main
         imagePullPolicy: Always
         ports:
