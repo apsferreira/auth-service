@@ -52,7 +52,7 @@ jobs:
 
       - name: Run tests
         working-directory: backend
-        run: go test ./... -v -cover || true   # não bloqueia por ausência de testes
+        run: go test ./... -v -cover
 
       - name: Setup Buildx
         if: github.event_name == 'push'
@@ -154,39 +154,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ---------------------------------------------------------------------------
-  # CD: Atualiza K8s manifests de staging (GitOps — develop)
-  # ---------------------------------------------------------------------------
-  update-staging-manifests:
-    name: Update K8s Manifests (staging)
-    runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend]
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Garante imagens :staging nos manifests
-        run: |
-          sed -i "s|${{ env.IMAGE_BACKEND }}:.*|${{ env.IMAGE_BACKEND }}:staging|g" \
-            k8s-staging/backend/deployment.yaml
-          sed -i "s|${{ env.IMAGE_FRONTEND }}:.*|${{ env.IMAGE_FRONTEND }}:staging|g" \
-            k8s-staging/frontend/deployment.yaml
-
-      - name: Commit e Push manifests de staging
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add k8s-staging/backend/deployment.yaml k8s-staging/frontend/deployment.yaml
-          git diff --staged --quiet || git commit -m "chore(k8s-staging): atualiza imagens staging [skip ci]"
-          git push
-
-  # ---------------------------------------------------------------------------
-  # CD: Atualiza K8s manifests de prod (GitOps — main)
+  # CD: Atualiza K8s manifests de produção (GitOps — main)
   # ---------------------------------------------------------------------------
   update-manifests:
     name: Update K8s Manifests (prod)
@@ -223,4 +191,38 @@ jobs:
           git add k8s/backend/deployment.yaml k8s/frontend/deployment.yaml
           git diff --staged --quiet || git commit -m "chore(k8s): atualiza imagens para sha-${{ steps.sha.outputs.short }} [skip ci]"
           git pull --rebase origin main
+          git push
+
+  # ---------------------------------------------------------------------------
+  # CD: Atualiza K8s manifests de staging (GitOps — develop)
+  # ArgoCD faz sync automático → namespace staging
+  # ---------------------------------------------------------------------------
+  update-staging-manifests:
+    name: Update K8s Manifests (staging)
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend]
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Força re-pull da imagem :staging nos manifests
+        run: |
+          sed -i "s|${{ env.IMAGE_BACKEND }}:.*|${{ env.IMAGE_BACKEND }}:staging|g" \
+            k8s-staging/backend/deployment.yaml
+          sed -i "s|${{ env.IMAGE_FRONTEND }}:.*|${{ env.IMAGE_FRONTEND }}:staging|g" \
+            k8s-staging/frontend/deployment.yaml
+
+      - name: Commit e Push manifests de staging
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add k8s-staging/backend/deployment.yaml k8s-staging/frontend/deployment.yaml
+          git diff --staged --quiet || git commit -m "chore(k8s-staging): atualiza imagens staging [skip ci]"
+          git pull --rebase origin develop
           git push
