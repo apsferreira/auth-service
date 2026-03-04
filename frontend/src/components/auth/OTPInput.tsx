@@ -7,10 +7,19 @@ interface OTPInputProps {
   onChange: (value: string) => void
   disabled?: boolean
   error?: string
+  label?: string
 }
 
-export function OTPInput({ length = 6, value, onChange, disabled = false, error }: OTPInputProps) {
+export function OTPInput({
+  length = 6,
+  value,
+  onChange,
+  disabled = false,
+  error,
+  label = 'Código de verificação',
+}: OTPInputProps) {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
+  const errorId = 'otp-error'
 
   useEffect(() => {
     inputRefs.current[0]?.focus()
@@ -58,7 +67,18 @@ export function OTPInput({ length = 6, value, onChange, disabled = false, error 
 
   return (
     <div>
-      <div className="flex gap-2 justify-center" onPaste={handlePaste}>
+      {/* Visually hidden group label for screen readers */}
+      <p id="otp-group-label" className="sr-only">
+        {label}
+      </p>
+
+      <div
+        role="group"
+        aria-labelledby="otp-group-label"
+        aria-describedby={error ? errorId : undefined}
+        className="flex gap-2 justify-center"
+        onPaste={handlePaste}
+      >
         {Array.from({ length }, (_, i) => (
           <input
             key={i}
@@ -72,6 +92,10 @@ export function OTPInput({ length = 6, value, onChange, disabled = false, error 
             onChange={(e) => handleChange(i, e.target.value)}
             onKeyDown={(e) => handleKeyDown(i, e)}
             disabled={disabled}
+            aria-label={`Dígito ${i + 1} de ${length}`}
+            aria-invalid={!!error}
+            aria-describedby={error ? errorId : undefined}
+            autoComplete={i === 0 ? 'one-time-code' : 'off'}
             className={cn(
               'w-12 h-14 text-center text-2xl font-bold rounded-lg border-2 transition-all',
               'bg-white dark:bg-gray-800',
@@ -85,8 +109,13 @@ export function OTPInput({ length = 6, value, onChange, disabled = false, error 
           />
         ))}
       </div>
+
       {error && (
-        <p className="mt-2 text-sm text-center text-danger-600 dark:text-danger-400">
+        <p
+          id={errorId}
+          role="alert"
+          className="mt-2 text-sm text-center text-danger-600 dark:text-danger-400"
+        >
           {error}
         </p>
       )}

@@ -2,10 +2,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: authservice-frontend
-  namespace: production
+  namespace: staging
   labels:
     app: authservice-frontend
-    version: v1
+    environment: staging
 spec:
   replicas: 1
   selector:
@@ -15,23 +15,22 @@ spec:
     metadata:
       labels:
         app: authservice-frontend
-        version: v1
+        environment: staging
     spec:
       containers:
       - name: frontend
-        image: ghcr.io/apsferreira/auth-service-frontend:sha-c14d180
-        # Tag atualizada pelo CI (GitHub Actions) a cada push para main
+        image: ghcr.io/apsferreira/auth-service-frontend:staging
         imagePullPolicy: Always
         ports:
         - containerPort: 80
           name: http
         resources:
           requests:
-            memory: "64Mi"
-            cpu: "50m"
+            memory: "32Mi"
+            cpu: "25m"
           limits:
-            memory: "128Mi"
-            cpu: "200m"
+            memory: "64Mi"
+            cpu: "100m"
         livenessProbe:
           httpGet:
             path: /health

@@ -30,6 +30,10 @@ services:
       WHATSAPP_API_KEY: ${WHATSAPP_API_KEY:-evolution-homelab-secret}
       WHATSAPP_INSTANCE: ${WHATSAPP_INSTANCE:-auth-service}
       WHATSAPP_DEFAULT_PHONE: ${WHATSAPP_DEFAULT_PHONE:-}
+      # Observabilidade — OpenTelemetry
+      OTEL_SERVICE_NAME: auth-service
+      # gRPC exporter expects host:port (no scheme). Use OTEL_EXPORTER_OTLP_ENDPOINT env to override.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-obs-otel-collector:4317}
     ports:
       - "3010:3010"
     volumes:

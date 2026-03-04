@@ -1,45 +1,44 @@
+/**
+ * Card — adapter wrapper around @iit/ui Card.
+ * Maps local `hover`/`padding` props to the @iit/ui API.
+ */
 import React from 'react'
-import { motion, HTMLMotionProps } from 'framer-motion'
+import { Card as IITCard, CardHeader, CardTitle, CardDescription, CardBody, CardFooter } from '@iit/ui'
 import { cn } from '@/lib/utils'
 
-interface CardProps extends HTMLMotionProps<'div'> {
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   hover?: boolean
+  hoverable?: boolean
   padding?: 'none' | 'sm' | 'md' | 'lg'
 }
 
-const Card = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ children, hover = false, padding = 'md', className, ...props }, ref) => {
-    const paddings = {
-      none: '',
-      sm: 'p-3',
-      md: 'p-4',
-      lg: 'p-6',
-    }
+const paddings = {
+  none: 'p-0',
+  sm: 'p-3',
+  md: 'p-4',
+  lg: 'p-6',
+}
 
+const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ children, hover, hoverable, padding = 'md', className, ...props }, ref) => {
     return (
-      <motion.div
+      <IITCard
         ref={ref}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        whileHover={hover ? { scale: 1.02, y: -4 } : undefined}
-        transition={{ duration: 0.2 }}
+        hoverable={hoverable || hover}
         className={cn(
-          'bg-white dark:bg-gray-800 rounded-xl shadow-sm',
-          'border border-gray-200 dark:border-gray-700',
-          'transition-all duration-200',
-          hover && 'hover:shadow-lg cursor-pointer',
+          'bg-white border-gray-200 text-gray-900',
           paddings[padding],
           className
         )}
         {...props}
       >
         {children}
-      </motion.div>
+      </IITCard>
     )
   }
 )
 
 Card.displayName = 'Card'
 
-export { Card }
+export { Card, CardHeader, CardTitle, CardDescription, CardBody, CardFooter }
 export default Card

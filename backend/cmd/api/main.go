@@ -14,9 +14,14 @@ import (
 	jwtpkg "github.com/apsferreira/auth-service/backend/internal/pkg/jwt"
 	"github.com/apsferreira/auth-service/backend/internal/repository"
 	"github.com/apsferreira/auth-service/backend/internal/service"
+	"github.com/apsferreira/auth-service/backend/internal/telemetry"
 )
 
 func main() {
+	// 0. Initialize observability
+	shutdownTelemetry := telemetry.Init("auth-service")
+	defer shutdownTelemetry()
+
 	// 1. Load config
 	cfg := config.Load()
 
@@ -73,6 +78,9 @@ func main() {
 			return c.Status(code).JSON(fiber.Map{"error": err.Error()})
 		},
 	})
+
+	// Observabilidade — OTel tracing middleware + /metrics endpoint
+	telemetry.RegisterFiber(app, "auth-service")
 
 	// 9. Global middleware
 	app.Use(middleware.Logger())

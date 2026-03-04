@@ -3,7 +3,8 @@
 # GitHub Actions + GHCR + ArgoCD GitOps
 #
 # Fluxo:
-#   push main  → build + push :sha-{hash} + :latest → atualiza k8s manifest → ArgoCD sync
+#   push main    → build + push :sha-{hash} + :latest → atualiza k8s/ → ArgoCD sync (prod)
+#   push develop → build + push :staging → atualiza k8s-staging/ → ArgoCD sync (staging)
 #   pull_request → build + test only (sem push)
 # =============================================================================
 
@@ -65,8 +66,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build e Push Backend Image
-        if: github.event_name == 'push'
+      - name: Build e Push Backend Image (prod — main)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v5
         with:
           context: ./backend
@@ -74,6 +75,16 @@ jobs:
           tags: |
             ${{ env.IMAGE_BACKEND }}:latest
             ${{ env.IMAGE_BACKEND }}:sha-${{ steps.sha.outputs.short }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build e Push Backend Image (staging — develop)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ env.IMAGE_BACKEND }}:staging
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -120,8 +131,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build e Push Frontend Image
-        if: github.event_name == 'push'
+      - name: Build e Push Frontend Image (prod — main)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
@@ -132,11 +143,21 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Build e Push Frontend Image (staging — develop)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ env.IMAGE_FRONTEND }}:staging
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   # ---------------------------------------------------------------------------
-  # CD: Atualiza K8s manifests com a nova tag (GitOps)
+  # CD: Atualiza K8s manifests de produção (GitOps — main)
   # ---------------------------------------------------------------------------
   update-manifests:
-    name: Update K8s Manifests
+    name: Update K8s Manifests (prod)
     runs-on: ubuntu-latest
     needs: [build-backend, build-frontend]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -170,4 +191,38 @@ jobs:
           git add k8s/backend/deployment.yaml k8s/frontend/deployment.yaml
           git diff --staged --quiet || git commit -m "chore(k8s): atualiza imagens para sha-${{ steps.sha.outputs.short }} [skip ci]"
           git pull --rebase origin main
+          git push
+
+  # ---------------------------------------------------------------------------
+  # CD: Atualiza K8s manifests de staging (GitOps — develop)
+  # ArgoCD faz sync automático → namespace staging
+  # ---------------------------------------------------------------------------
+  update-staging-manifests:
+    name: Update K8s Manifests (staging)
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend]
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Força re-pull da imagem :staging nos manifests
+        run: |
+          sed -i "s|${{ env.IMAGE_BACKEND }}:.*|${{ env.IMAGE_BACKEND }}:staging|g" \
+            k8s-staging/backend/deployment.yaml
+          sed -i "s|${{ env.IMAGE_FRONTEND }}:.*|${{ env.IMAGE_FRONTEND }}:staging|g" \
+            k8s-staging/frontend/deployment.yaml
+
+      - name: Commit e Push manifests de staging
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add k8s-staging/backend/deployment.yaml k8s-staging/frontend/deployment.yaml
+          git diff --staged --quiet || git commit -m "chore(k8s-staging): atualiza imagens staging [skip ci]"
+          git pull --rebase origin develop
           git push
