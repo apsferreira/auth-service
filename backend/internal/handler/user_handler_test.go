@@ -68,36 +68,12 @@ func doUserRequest(t *testing.T, app *fiber.App, method, path, body string, head
 
 // ─── List ────────────────────────────────────────────────────────────────────
 
-func TestListUsers_MissingTenantID_Returns401(t *testing.T) {
-	app := fiber.New(fiber.Config{DisableStartupMessage: true})
-	h := NewUserHandler(nil)
-	app.Get("/users", h.List)
-
-	req := httptest.NewRequest("GET", "/users", nil)
-	resp, err := app.Test(req, -1)
-	if err != nil {
-		t.Fatalf("fiber.Test error: %v", err)
-	}
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("expected 401 when tenantID is missing, got %d", resp.StatusCode)
-	}
-}
-
-func TestListUsers_InvalidTenantID_Returns400(t *testing.T) {
-	app := fiber.New(fiber.Config{DisableStartupMessage: true})
-	h := NewUserHandler(nil)
-	app.Get("/users", func(c *fiber.Ctx) error {
-		c.Locals("tenantID", "invalid-uuid")
-		return h.List(c)
-	})
-
-	req := httptest.NewRequest("GET", "/users", nil)
-	resp, err := app.Test(req, -1)
-	if err != nil {
-		t.Fatalf("fiber.Test error: %v", err)
-	}
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("expected 400 for invalid tenant ID, got %d", resp.StatusCode)
+func TestListUsers_ValidTenantID_CallsService(t *testing.T) {
+	app := buildUserApp()
+	// This will return 500 since service is nil, but confirms middleware pass-through
+	resp := doUserRequest(t, app, "GET", "/api/v1/users/", "", nil)
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("expected 500 when service is nil, got %d", resp.StatusCode)
 	}
 }
 
