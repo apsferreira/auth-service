@@ -65,8 +65,8 @@ func main() {
 	adminHandler := handler.NewAdminHandler(adminService, eventService)
 	healthHandler := handler.NewHealthHandler()
 
-	// 7. Initialize rate limiter (10 requests per hour per IP for OTP endpoints)
-	otpRateLimiter := middleware.NewRateLimiter(10, time.Hour)
+	// 7. Initialize rate limiter (REDUZIDO: 5 requests per hour per IP for OTP endpoints)
+	otpRateLimiter := middleware.NewRateLimiter(5, time.Hour)
 
 	// 8. Create Fiber app
 	app := fiber.New(fiber.Config{

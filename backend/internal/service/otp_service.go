@@ -68,30 +68,46 @@ func (s *OTPService) GenerateAndStore(email string) (string, error) {
 	return code, nil
 }
 
-// Verify checks a code against the stored OTP for an email.
+// Verify checks a code against the stored OTP for an email with constant-time execution.
 func (s *OTPService) Verify(email, code string) error {
+	// Garantir tempo de execução constante para prevenir timing attacks
+	startTime := time.Now()
+	defer func() {
+		// Forçar no mínimo 200ms de resposta para dificultar timing analysis
+		elapsed := time.Since(startTime)
+		if elapsed < 200*time.Millisecond {
+			time.Sleep(200*time.Millisecond - elapsed)
+		}
+	}()
+
 	otp, err := s.otpRepo.FindLatestByEmail(email)
 	if err != nil {
 		return fmt.Errorf("no valid OTP found for this email")
+	}
+
+	// Checar expiração ANTES de incrementar tentativas (evita burn de attempts em OTPs expirados)
+	if time.Now().After(otp.ExpiresAt) {
+		return fmt.Errorf("OTP has expired")
 	}
 
 	if otp.Attempts >= s.maxAttempts {
 		return fmt.Errorf("maximum verification attempts exceeded")
 	}
 
-	// Increment attempts before checking (prevents timing attacks)
+	// Incrementar tentativas ANTES de validar (previne leak de informação)
 	_ = s.otpRepo.IncrementAttempts(otp.ID)
 
-	if time.Now().After(otp.ExpiresAt) {
-		return fmt.Errorf("OTP has expired")
-	}
-
+	// bcrypt.CompareHashAndPassword tem timing variável, mas com delay acima
+	// e limite de 3 tentativas, fica impraticável explorar
 	if err := bcrypt.CompareHashAndPassword([]byte(otp.CodeHash), []byte(code)); err != nil {
 		return fmt.Errorf("invalid OTP code")
 	}
 
 	// Cleanup: delete all OTPs for this email
 	_ = s.otpRepo.DeleteByEmail(email)
+
+	// Log de sucesso (para monitoramento de timing attacks)
+	fmt.Printf("[OTP] Verification successful for %s in %v\n", email, time.Since(startTime))
 
 	return nil
 }
