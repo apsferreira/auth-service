@@ -256,6 +256,10 @@ func (h *AdminHandler) SetRolePermissions(c *fiber.Ctx) error {
 
 // ListEvents handles GET /api/v1/admin/events
 func (h *AdminHandler) ListEvents(c *fiber.Ctx) error {
+	if h.eventService == nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "event service not configured"})
+	}
+
 	filter := domain.AuthEventFilter{
 		EventType: c.Query("event_type"),
 		Email:     c.Query("email"),

@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
-	"os"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -188,7 +188,7 @@ func TestLogger_DoesNotInterfereWithResponse(t *testing.T) {
 	app := buildLoggerApp()
 	
 	// Temporarily silence logs for this test to avoid cluttering test output
-	log.SetOutput(os.Discard)
+	log.SetOutput(io.Discard)
 	defer log.SetOutput(os.Stderr)
 	
 	req := httptest.NewRequest("GET", "/test", nil)

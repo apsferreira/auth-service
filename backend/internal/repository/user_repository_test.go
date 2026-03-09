@@ -3,7 +3,6 @@ package repository
 import (
 	"testing"
 
-	"github.com/google/uuid"
 )
 
 // These tests focus on the repository's struct methods and validation logic
