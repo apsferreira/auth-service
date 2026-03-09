@@ -91,12 +91,6 @@ func TestLogger_LogsErrorRequest(t *testing.T) {
 	})
 	
 	// Verify log format contains expected elements
-	expectedElements := []string{
-		"[GET]",
-		"/error",
-		"500",
-	}
-	
 	if !strings.Contains(logOutput, "[GET]") || !strings.Contains(logOutput, "/error") || !strings.Contains(logOutput, "500") {
 		t.Errorf("expected log to contain method, path, and status, but log was: %s", logOutput)
 	}
