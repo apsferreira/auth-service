@@ -129,10 +129,10 @@ func TestCreateUser_MissingEmail_Returns400(t *testing.T) {
 
 func TestCreateUser_ValidData_CallsService(t *testing.T) {
 	app := buildUserApp()
-	// This will return 400 since service is nil, but confirms validation passes
+	// This will return 500 since service is nil, but confirms validation passes
 	resp := doUserRequest(t, app, "POST", "/api/v1/users", `{"email":"test@example.com","full_name":"John Doe"}`, nil)
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("expected 400 when service is nil (validation passed), got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("expected 500 when service is nil (validation passed), got %d", resp.StatusCode)
 	}
 }
 
@@ -149,10 +149,10 @@ func TestGetUserByID_InvalidID_Returns400(t *testing.T) {
 func TestGetUserByID_ValidID_CallsService(t *testing.T) {
 	userID := uuid.New().String()
 	app := buildUserApp()
-	// This will return 404 since service is nil, but confirms validation passes
+	// This will return 500 since service is nil, but confirms validation passes
 	resp := doUserRequest(t, app, "GET", "/api/v1/users/"+userID, "", nil)
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("expected 404 when service is nil (validation passed), got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("expected 500 when service is nil (validation passed), got %d", resp.StatusCode)
 	}
 }
 
@@ -178,10 +178,10 @@ func TestUpdateUser_InvalidJSON_Returns400(t *testing.T) {
 func TestUpdateUser_ValidData_CallsService(t *testing.T) {
 	userID := uuid.New().String()
 	app := buildUserApp()
-	// This will return 400 since service is nil, but confirms validation passes
+	// This will return 500 since service is nil, but confirms validation passes
 	resp := doUserRequest(t, app, "PUT", "/api/v1/users/"+userID, `{"full_name":"Updated Name"}`, nil)
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("expected 400 when service is nil (validation passed), got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("expected 500 when service is nil (validation passed), got %d", resp.StatusCode)
 	}
 }
 
@@ -198,9 +198,9 @@ func TestDeleteUser_InvalidID_Returns400(t *testing.T) {
 func TestDeleteUser_ValidID_CallsService(t *testing.T) {
 	userID := uuid.New().String()
 	app := buildUserApp()
-	// This will return 400 since service is nil, but confirms validation passes
+	// This will return 500 since service is nil, but confirms validation passes
 	resp := doUserRequest(t, app, "DELETE", "/api/v1/users/"+userID, "", nil)
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("expected 400 when service is nil (validation passed), got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("expected 500 when service is nil (validation passed), got %d", resp.StatusCode)
 	}
 }

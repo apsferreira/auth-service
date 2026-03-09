@@ -18,6 +18,10 @@ func NewUserHandler(userService *service.UserService) *UserHandler {
 
 // List handles GET /api/v1/users
 func (h *UserHandler) List(c *fiber.Ctx) error {
+	if h.userService == nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(domain.ErrorResponse{Error: "user service not configured"})
+	}
+
 	tenantIDStr, ok := c.Locals("tenantID").(string)
 	if !ok {
 		return c.Status(401).JSON(domain.ErrorResponse{Error: "unauthorized"})
@@ -47,6 +51,10 @@ func (h *UserHandler) Create(c *fiber.Ctx) error {
 		return c.Status(400).JSON(domain.ErrorResponse{Error: "email is required"})
 	}
 
+	if h.userService == nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(domain.ErrorResponse{Error: "user service not configured"})
+	}
+
 	// Default to caller's tenant if not specified
 	if req.TenantID == "" {
 		if tid, ok := c.Locals("tenantID").(string); ok {
@@ -69,6 +77,10 @@ func (h *UserHandler) GetByID(c *fiber.Ctx) error {
 		return c.Status(400).JSON(domain.ErrorResponse{Error: "invalid user ID"})
 	}
 
+	if h.userService == nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(domain.ErrorResponse{Error: "user service not configured"})
+	}
+
 	user, err := h.userService.GetByID(id)
 	if err != nil {
 		return c.Status(404).JSON(domain.ErrorResponse{Error: "user not found"})
@@ -89,6 +101,10 @@ func (h *UserHandler) Update(c *fiber.Ctx) error {
 		return c.Status(400).JSON(domain.ErrorResponse{Error: "invalid request body"})
 	}
 
+	if h.userService == nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(domain.ErrorResponse{Error: "user service not configured"})
+	}
+
 	user, err := h.userService.Update(id, req)
 	if err != nil {
 		return c.Status(400).JSON(domain.ErrorResponse{Error: err.Error()})
@@ -102,6 +118,10 @@ func (h *UserHandler) Delete(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(domain.ErrorResponse{Error: "invalid user ID"})
+	}
+
+	if h.userService == nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(domain.ErrorResponse{Error: "user service not configured"})
 	}
 
 	if err := h.userService.Delete(id); err != nil {
