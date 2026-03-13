@@ -93,6 +93,18 @@ type OTPCode struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// OAuthIdentity links a user to a social login provider account
+type OAuthIdentity struct {
+	ID         uuid.UUID  `json:"id"`
+	UserID     uuid.UUID  `json:"user_id"`
+	Provider   string     `json:"provider"`    // "google", "github", etc.
+	ProviderID string     `json:"provider_id"` // provider's unique user ID
+	Email      string     `json:"email"`
+	AvatarURL  *string    `json:"avatar_url,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
+}
+
 // RefreshToken represents a stored refresh token
 type RefreshToken struct {
 	ID        uuid.UUID  `json:"id"`

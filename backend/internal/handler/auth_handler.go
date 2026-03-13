@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"encoding/base64"
+	"fmt"
 	"strings"
 	"time"
 
@@ -12,12 +14,21 @@ import (
 )
 
 type AuthHandler struct {
-	authService  *service.AuthService
-	eventService *service.EventService
+	authService   *service.AuthService
+	eventService  *service.EventService
+	googleService *service.GoogleOAuthService
 }
 
-func NewAuthHandler(authService *service.AuthService, eventService *service.EventService) *AuthHandler {
-	return &AuthHandler{authService: authService, eventService: eventService}
+func NewAuthHandler(
+	authService *service.AuthService,
+	eventService *service.EventService,
+	googleService *service.GoogleOAuthService,
+) *AuthHandler {
+	return &AuthHandler{
+		authService:   authService,
+		eventService:  eventService,
+		googleService: googleService,
+	}
 }
 
 // RequestOTP handles POST /api/v1/auth/request-otp
@@ -208,8 +219,7 @@ func (h *AuthHandler) Validate(c *fiber.Ctx) error {
 	return c.Status(200).JSON(resp)
 }
 
-// ProvisionUser handles POST /api/v1/auth/provision-user (service-to-service, protected by X-Service-Token)
-// Called by customer-service to ensure a User record exists when a customer registers.
+// ProvisionUser handles POST /api/v1/auth/provision-user (service-to-service)
 func (h *AuthHandler) ProvisionUser(serviceToken string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		token := c.Get("X-Service-Token")
@@ -239,6 +249,75 @@ func (h *AuthHandler) ProvisionUser(serviceToken string) fiber.Handler {
 			"message": "user provisioned",
 		})
 	}
+}
+
+// GoogleLogin handles GET /api/v1/auth/google
+// Returns the Google OAuth2 authorization URL.
+// Query param: redirect_uri — where to send the user after successful auth (frontend URL).
+func (h *AuthHandler) GoogleLogin(c *fiber.Ctx) error {
+	if h.googleService == nil || !h.googleService.IsConfigured() {
+		return c.Status(503).JSON(domain.ErrorResponse{Error: "Google OAuth is not configured"})
+	}
+
+	redirectURI := c.Query("redirect_uri", "")
+	if redirectURI == "" {
+		return c.Status(400).JSON(domain.ErrorResponse{Error: "redirect_uri query param is required"})
+	}
+
+	// Encode the frontend redirect URI in state so we can use it in the callback
+	state := base64.URLEncoding.EncodeToString([]byte(redirectURI))
+	authURL := h.googleService.GetAuthURL(state)
+
+	return c.Status(200).JSON(domain.GoogleLoginURLResponse{URL: authURL})
+}
+
+// GoogleCallback handles GET /api/v1/auth/google/callback
+// Google redirects here after the user authorizes the app.
+// Exchanges the code, finds/creates the user, and redirects to the frontend with tokens.
+func (h *AuthHandler) GoogleCallback(c *fiber.Ctx) error {
+	code := c.Query("code")
+	state := c.Query("state")
+	errParam := c.Query("error")
+
+	if errParam != "" {
+		return c.Status(400).JSON(domain.ErrorResponse{Error: "Google OAuth error: " + errParam})
+	}
+	if code == "" {
+		return c.Status(400).JSON(domain.ErrorResponse{Error: "missing code parameter"})
+	}
+
+	// Decode the frontend redirect URI from state
+	redirectURIBytes, err := base64.URLEncoding.DecodeString(state)
+	if err != nil || len(redirectURIBytes) == 0 {
+		return c.Status(400).JSON(domain.ErrorResponse{Error: "invalid state parameter"})
+	}
+	frontendRedirectURI := string(redirectURIBytes)
+
+	// Exchange code for Google user info
+	googleUser, err := h.googleService.ExchangeCode(code)
+	if err != nil {
+		return c.Status(401).JSON(domain.ErrorResponse{Error: "failed to authenticate with Google: " + err.Error()})
+	}
+
+	// Find or create user, generate JWT
+	authResp, err := h.authService.LoginWithGoogle(googleUser)
+	if err != nil {
+		return c.Status(500).JSON(domain.ErrorResponse{Error: "login failed: " + err.Error()})
+	}
+
+	h.eventService.Log(domain.EventLoginSuccess, authResp.User.Email, c.IP(), c.Get("User-Agent"), &authResp.User.ID, map[string]interface{}{
+		"method":            "google_oauth",
+		"access_expires_in": authResp.ExpiresIn,
+	})
+
+	// Redirect to frontend with tokens in query string
+	redirectURL := fmt.Sprintf("%s?access_token=%s&refresh_token=%s&expires_in=%d",
+		frontendRedirectURI,
+		authResp.AccessToken,
+		authResp.RefreshToken,
+		authResp.ExpiresIn,
+	)
+	return c.Redirect(redirectURL, fiber.StatusTemporaryRedirect)
 }
 
 // sourceFromOrigin maps a browser Origin header to a human-readable service name.

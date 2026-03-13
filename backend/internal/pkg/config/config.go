@@ -23,6 +23,10 @@ type Config struct {
 	OTPRateLimitPerEmail      int
 	OTPRateLimitWindowMinutes int
 	ServiceToken              string // shared secret for service-to-service calls
+	// Google OAuth2
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleRedirectURI  string
 	TelegramBotToken          string
 	TelegramChatID            string
 	WhatsAppAPIURL            string
@@ -49,6 +53,9 @@ func Load() *Config {
 		OTPRateLimitPerEmail:      getIntEnv("OTP_RATE_LIMIT_PER_EMAIL", 3),
 		OTPRateLimitWindowMinutes: getIntEnv("OTP_RATE_LIMIT_WINDOW_MINUTES", 15),
 		ServiceToken:              getEnv("SERVICE_TOKEN", "service-secret-change-in-production"),
+		GoogleClientID:            getEnv("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret:        getEnv("GOOGLE_CLIENT_SECRET", ""),
+		GoogleRedirectURI:         getEnv("GOOGLE_REDIRECT_URI", ""),
 		TelegramBotToken:          getEnv("TELEGRAM_BOT_TOKEN", ""),
 		TelegramChatID:            getEnv("TELEGRAM_CHAT_ID", ""),
 		WhatsAppAPIURL:            getEnv("WHATSAPP_API_URL", "http://shared-evolution-api:8080"),

@@ -50,6 +50,11 @@ type ValidateResponse struct {
 	Message     string              `json:"message,omitempty"`
 }
 
+// GoogleLoginURLResponse is returned by GET /auth/google to initiate the OAuth flow
+type GoogleLoginURLResponse struct {
+	URL string `json:"url"`
+}
+
 // ErrorResponse is a standard error envelope
 type ErrorResponse struct {
 	Error   string `json:"error"`

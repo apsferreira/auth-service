@@ -14,23 +14,25 @@ import (
 )
 
 type AuthService struct {
-	userRepo           *repository.UserRepository
-	otpService         *OTPService
-	emailService       *EmailService
-	telegramNotifier   *TelegramNotifier
-	whatsappService    *WhatsAppService
-	tokenRepo          *repository.TokenRepository
-	jwtService         *jwtpkg.JWTService
+	userRepo         repository.UserRepositoryInterface
+	otpService       *OTPService
+	emailService     *EmailService
+	telegramNotifier *TelegramNotifier
+	whatsappService  *WhatsAppService
+	tokenRepo        repository.TokenRepositoryInterface
+	jwtService       *jwtpkg.JWTService
+	oauthRepo        repository.OAuthRepositoryInterface
 }
 
 func NewAuthService(
-	userRepo *repository.UserRepository,
+	userRepo repository.UserRepositoryInterface,
 	otpService *OTPService,
 	emailService *EmailService,
 	telegramNotifier *TelegramNotifier,
 	whatsappService *WhatsAppService,
-	tokenRepo *repository.TokenRepository,
+	tokenRepo repository.TokenRepositoryInterface,
 	jwtService *jwtpkg.JWTService,
+	oauthRepo repository.OAuthRepositoryInterface,
 ) *AuthService {
 	return &AuthService{
 		userRepo:         userRepo,
@@ -40,6 +42,7 @@ func NewAuthService(
 		whatsappService:  whatsappService,
 		tokenRepo:        tokenRepo,
 		jwtService:       jwtService,
+		oauthRepo:        oauthRepo,
 	}
 }
 
@@ -352,6 +355,135 @@ func (s *AuthService) ProvisionUser(email, fullName string) (*domain.User, error
 		return nil, fmt.Errorf("failed to assign role: %w", err)
 	}
 	return user, nil
+}
+
+// LoginWithGoogle handles the complete Google OAuth login flow:
+// finds or creates the user, links the OAuth identity, and returns JWT tokens.
+func (s *AuthService) LoginWithGoogle(googleUser *GoogleUserInfo) (*domain.AuthResponse, error) {
+	var user *domain.User
+
+	// 1. Check if we already have an OAuth identity for this Google account
+	identity, err := s.oauthRepo.FindByProvider("google", googleUser.ID)
+	if err == nil {
+		// Identity exists — load the linked user
+		user, err = s.userRepo.FindByID(identity.UserID)
+		if err != nil {
+			return nil, fmt.Errorf("linked user not found: %w", err)
+		}
+	} else {
+		// 2. No identity — find user by email (may have registered via OTP before)
+		user, err = s.userRepo.FindByEmail(googleUser.Email)
+		if err == sql.ErrNoRows {
+			// 3. Brand new user — create account
+			if err := s.createGoogleUser(googleUser); err != nil {
+				return nil, fmt.Errorf("failed to create user: %w", err)
+			}
+			user, err = s.userRepo.FindByEmail(googleUser.Email)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load new user: %w", err)
+			}
+		} else if err != nil {
+			return nil, fmt.Errorf("failed to find user: %w", err)
+		}
+
+		// Link the Google identity to this user (new or existing)
+		avatarURL := googleUser.Picture
+		newIdentity := &domain.OAuthIdentity{
+			UserID:     user.ID,
+			Provider:   "google",
+			ProviderID: googleUser.ID,
+			Email:      googleUser.Email,
+			AvatarURL:  &avatarURL,
+		}
+		if err := s.oauthRepo.Upsert(newIdentity); err != nil {
+			log.Printf("[WARN] Failed to upsert OAuth identity: %v", err)
+		}
+	}
+
+	// 4. Update avatar if user doesn't have one yet and Google provided it
+	if user.AvatarURL == nil && googleUser.Picture != "" {
+		avatarURL := googleUser.Picture
+		req := domain.UserUpdateRequest{AvatarURL: &avatarURL}
+		updated, err := s.userRepo.Update(user.ID, req)
+		if err == nil {
+			user = updated
+		}
+	}
+
+	// 5. Update full name if empty
+	if user.FullName == "" && googleUser.Name != "" {
+		req := domain.UserUpdateRequest{FullName: &googleUser.Name}
+		updated, err := s.userRepo.Update(user.ID, req)
+		if err == nil {
+			user = updated
+		}
+	}
+
+	_ = s.userRepo.UpdateLastLogin(user.ID)
+
+	roles, permissions, err := s.userRepo.GetUserRolesAndPermissions(user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user roles: %w", err)
+	}
+
+	accessToken, err := s.jwtService.GenerateAccessToken(user.ID, user.TenantID, user.Email, roles, permissions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate access token: %w", err)
+	}
+
+	refreshTokenValue, refreshTokenHash, err := s.jwtService.GenerateRefreshToken()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
+	}
+
+	rt := &domain.RefreshToken{
+		ID:        uuid.New(),
+		UserID:    user.ID,
+		TokenHash: refreshTokenHash,
+		ExpiresAt: time.Now().Add(s.jwtService.GetRefreshExpiry()),
+		CreatedAt: time.Now(),
+	}
+	if err := s.tokenRepo.Create(rt); err != nil {
+		return nil, fmt.Errorf("failed to store refresh token: %w", err)
+	}
+
+	return &domain.AuthResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshTokenValue,
+		ExpiresIn:    int(s.jwtService.GetAccessExpiry().Seconds()),
+		User:         user,
+		Roles:        roles,
+		Permissions:  permissions,
+	}, nil
+}
+
+func (s *AuthService) createGoogleUser(googleUser *GoogleUserInfo) error {
+	tenantID, err := s.userRepo.GetDefaultTenantID()
+	if err != nil {
+		return fmt.Errorf("no default tenant: %w", err)
+	}
+	roleID, err := s.userRepo.GetDefaultRoleID(tenantID)
+	if err != nil {
+		return fmt.Errorf("no default role: %w", err)
+	}
+
+	now := time.Now()
+	avatarURL := googleUser.Picture
+	user := &domain.User{
+		ID:        uuid.New(),
+		TenantID:  tenantID,
+		Email:     googleUser.Email,
+		FullName:  googleUser.Name,
+		AvatarURL: &avatarURL,
+		IsActive:  true,
+		RoleID:    &roleID,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := s.userRepo.Create(user); err != nil {
+		return err
+	}
+	return s.userRepo.AddUserRole(user.ID, roleID)
 }
 
 func (s *AuthService) createDefaultUser(email string) error {

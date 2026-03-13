@@ -41,6 +41,7 @@ func main() {
 	userRepo := repository.NewUserRepository()
 	otpRepo := repository.NewOTPRepository()
 	tokenRepo := repository.NewTokenRepository()
+	oauthRepo := repository.NewOAuthRepository()
 	serviceRepo := repository.NewServiceRepository()
 	permissionRepo := repository.NewPermissionRepository()
 	roleRepo := repository.NewRoleRepository()
@@ -55,12 +56,13 @@ func main() {
 		cfg.OTPRateLimitWindowMinutes,
 	)
 	eventService := service.NewEventService(eventRepo, cfg.Env == "development")
-	authService := service.NewAuthService(userRepo, otpService, emailService, telegramNotifier, whatsappService, tokenRepo, jwtService)
+	googleService := service.NewGoogleOAuthService(cfg.GoogleClientID, cfg.GoogleClientSecret, cfg.GoogleRedirectURI)
+	authService := service.NewAuthService(userRepo, otpService, emailService, telegramNotifier, whatsappService, tokenRepo, jwtService, oauthRepo)
 	userService := service.NewUserService(userRepo)
 	adminService := service.NewAdminService(serviceRepo, permissionRepo, roleRepo)
 
 	// 6. Initialize handlers
-	authHandler := handler.NewAuthHandler(authService, eventService)
+	authHandler := handler.NewAuthHandler(authService, eventService, googleService)
 	userHandler := handler.NewUserHandler(userService)
 	adminHandler := handler.NewAdminHandler(adminService, eventService)
 	healthHandler := handler.NewHealthHandler()
@@ -100,6 +102,9 @@ func main() {
 	auth.Post("/refresh", authHandler.Refresh)
 	auth.Post("/validate", authHandler.Validate)
 	auth.Post("/provision-user", authHandler.ProvisionUser(cfg.ServiceToken))
+	// Google OAuth2
+	auth.Get("/google", authHandler.GoogleLogin)
+	auth.Get("/google/callback", authHandler.GoogleCallback)
 
 	// Protected auth routes
 	authProtected := api.Group("/auth", middleware.Auth(jwtService))
