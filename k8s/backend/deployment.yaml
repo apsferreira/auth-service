@@ -51,7 +51,7 @@ spec:
               name: authservice-secrets
               key: resend-from-email
         - name: ALLOWED_ORIGINS
-          value: "https://biblioteca.institutoitinerante.com.br,https://focus-hub.institutoitinerante.com.br,https://auth.institutoitinerante.com.br"
+          value: "https://libri.institutoitinerante.com.br,https://biblioteca.institutoitinerante.com.br,https://nitro.institutoitinerante.com.br,https://focus-hub.institutoitinerante.com.br,https://customers.institutoitinerante.com.br,https://catalog.institutoitinerante.com.br,https://auth.institutoitinerante.com.br"
         - name: JWT_ACCESS_EXPIRY
           value: "15m"
         - name: JWT_REFRESH_EXPIRY
