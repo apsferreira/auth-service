@@ -15,7 +15,7 @@ const handlerTestServiceToken = "test-service-token-xyz"
 // Isso é seguro para todos os caminhos de validação (400/401), que retornam ANTES de chamar qualquer serviço.
 func buildAuthApp() *fiber.App {
 	app := fiber.New(fiber.Config{DisableStartupMessage: true})
-	h := NewAuthHandler(nil, nil)
+	h := NewAuthHandler(nil, nil, nil)
 	app.Post("/api/v1/auth/request-otp", h.RequestOTP)
 	app.Post("/api/v1/auth/verify-otp", h.VerifyOTP)
 	app.Post("/api/v1/auth/refresh", h.Refresh)
