@@ -18,6 +18,7 @@ type UserRepositoryInterface interface {
 	List(tenantID uuid.UUID) ([]*domain.User, error)
 	SetPassword(userID uuid.UUID, hash string) error
 	UpdateLastLogin(userID uuid.UUID) error
+	UpdateProfile(id uuid.UUID, fullName string) (*domain.User, error)
 	AddUserRole(userID, roleID uuid.UUID) error
 	GetUserRolesAndPermissions(userID uuid.UUID) (roles []string, permissions map[string][]string, err error)
 	GetDefaultTenantID() (uuid.UUID, error)

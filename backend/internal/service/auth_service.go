@@ -252,6 +252,11 @@ func (s *AuthService) GetCurrentUser(userID uuid.UUID) (*domain.User, error) {
 	return user, nil
 }
 
+// UpdateCurrentUser updates the authenticated user's profile.
+func (s *AuthService) UpdateCurrentUser(userID uuid.UUID, fullName string) (*domain.User, error) {
+	return s.userRepo.UpdateProfile(userID, fullName)
+}
+
 // AdminLogin authenticates an admin user with username/password (admin panel only).
 func (s *AuthService) AdminLogin(identifier, password string) (*domain.AuthResponse, error) {
 	user, err := s.userRepo.FindByUsernameOrEmail(identifier)
@@ -322,9 +327,19 @@ func (s *AuthService) AdminLogin(identifier, password string) (*domain.AuthRespo
 
 
 // ProvisionUser ensures a user account exists for the given email (called by customer-service).
+// If the user already exists and has an empty full_name, it is updated with the provided value.
 func (s *AuthService) ProvisionUser(email, fullName string) (*domain.User, error) {
 	existing, err := s.userRepo.FindByEmail(email)
 	if err == nil {
+		// Update full_name if auth-service record is out of sync (e.g. first OTP created empty name)
+		if existing.FullName == "" && fullName != "" {
+			updated, updateErr := s.userRepo.UpdateProfile(existing.ID, fullName)
+			if updateErr == nil {
+				return updated, nil
+			}
+			// Non-fatal: log and return existing if update fails
+			log.Printf("ProvisionUser: failed to update full_name for %s: %v", email, updateErr)
+		}
 		return existing, nil
 	}
 

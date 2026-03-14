@@ -109,6 +109,7 @@ func main() {
 	// Protected auth routes
 	authProtected := api.Group("/auth", middleware.Auth(jwtService))
 	authProtected.Get("/me", authHandler.Me)
+	authProtected.Patch("/me", authHandler.UpdateMe)
 	authProtected.Post("/logout", authHandler.Logout)
 
 	// Protected user management routes (admin only)

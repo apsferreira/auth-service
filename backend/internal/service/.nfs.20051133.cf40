@@ -1,0 +1,58 @@
+package service
+
+import (
+	"testing"
+)
+
+func TestWhatsAppService_NewWhatsAppService(t *testing.T) {
+	svc := NewWhatsAppService("http://localhost:8080", "test-api-key", "test-instance", "5511999990000")
+	
+	if svc == nil {
+		t.Fatal("expected service, got nil")
+	}
+}
+
+func TestWhatsAppService_IsConfigured_True(t *testing.T) {
+	svc := NewWhatsAppService("http://localhost:8080", "test-api-key", "test-instance", "5511999990000")
+	
+	if !svc.IsConfigured() {
+		t.Error("expected IsConfigured=true when all params are set")
+	}
+}
+
+func TestWhatsAppService_IsConfigured_False_NoURL(t *testing.T) {
+	svc := NewWhatsAppService("", "test-api-key", "test-instance", "5511999990000")
+	
+	if svc.IsConfigured() {
+		t.Error("expected IsConfigured=false when base URL is empty")
+	}
+}
+
+func TestWhatsAppService_IsConfigured_False_NoAPIKey(t *testing.T) {
+	svc := NewWhatsAppService("http://localhost:8080", "", "test-instance", "5511999990000")
+	
+	if svc.IsConfigured() {
+		t.Error("expected IsConfigured=false when API key is empty")
+	}
+}
+
+func TestWhatsAppService_SendOTP_NotConfigured(t *testing.T) {
+	svc := NewWhatsAppService("", "", "", "")
+	
+	err := svc.SendOTP("test@example.com", "123456")
+	
+	// When not configured, SendOTP returns nil (silently skips)
+	if err != nil {
+		t.Fatalf("expected no error when not configured, got %v", err)
+	}
+}
+
+func TestWhatsAppService_GetInstanceQRCode_NotConfigured(t *testing.T) {
+	svc := NewWhatsAppService("", "", "", "")
+	
+	_, err := svc.GetInstanceQRCode()
+	
+	if err == nil {
+		t.Fatal("expected error when not configured, got nil")
+	}
+}

@@ -1,0 +1,65 @@
+package mocks
+
+import (
+	"github.com/apsferreira/auth-service/backend/internal/domain"
+	"github.com/google/uuid"
+)
+
+type MockPermissionRepository struct {
+	CreateFn               func(perm *domain.Permission) error
+	DeleteFn               func(id uuid.UUID) error
+	FindByIDFn             func(id uuid.UUID) (*domain.Permission, error)
+	ListAllFn              func() ([]*domain.Permission, error)
+	ListByServiceFn        func(serviceID uuid.UUID) ([]*domain.Permission, error)
+	GetRolePermissionIDsFn func(roleID uuid.UUID) ([]uuid.UUID, error)
+	SetRolePermissionsFn   func(roleID uuid.UUID, permissionIDs []uuid.UUID) error
+}
+
+func (m *MockPermissionRepository) Create(perm *domain.Permission) error {
+	if m.CreateFn != nil {
+		return m.CreateFn(perm)
+	}
+	return nil
+}
+
+func (m *MockPermissionRepository) Delete(id uuid.UUID) error {
+	if m.DeleteFn != nil {
+		return m.DeleteFn(id)
+	}
+	return nil
+}
+
+func (m *MockPermissionRepository) FindByID(id uuid.UUID) (*domain.Permission, error) {
+	if m.FindByIDFn != nil {
+		return m.FindByIDFn(id)
+	}
+	return nil, nil
+}
+
+func (m *MockPermissionRepository) ListAll() ([]*domain.Permission, error) {
+	if m.ListAllFn != nil {
+		return m.ListAllFn()
+	}
+	return nil, nil
+}
+
+func (m *MockPermissionRepository) ListByService(serviceID uuid.UUID) ([]*domain.Permission, error) {
+	if m.ListByServiceFn != nil {
+		return m.ListByServiceFn(serviceID)
+	}
+	return nil, nil
+}
+
+func (m *MockPermissionRepository) GetRolePermissionIDs(roleID uuid.UUID) ([]uuid.UUID, error) {
+	if m.GetRolePermissionIDsFn != nil {
+		return m.GetRolePermissionIDsFn(roleID)
+	}
+	return nil, nil
+}
+
+func (m *MockPermissionRepository) SetRolePermissions(roleID uuid.UUID, permissionIDs []uuid.UUID) error {
+	if m.SetRolePermissionsFn != nil {
+		return m.SetRolePermissionsFn(roleID, permissionIDs)
+	}
+	return nil
+}

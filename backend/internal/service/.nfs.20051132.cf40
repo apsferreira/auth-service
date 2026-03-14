@@ -1,0 +1,393 @@
+package service
+
+import (
+	"database/sql"
+	"errors"
+	"testing"
+
+	"github.com/apsferreira/auth-service/backend/internal/domain"
+	"github.com/apsferreira/auth-service/backend/internal/repository/mocks"
+	"github.com/google/uuid"
+)
+
+// ─── List ────────────────────────────────────────────────────────────────────
+
+func TestUserService_List_Success(t *testing.T) {
+	tenantID := uuid.New()
+	expectedUsers := []*domain.User{
+		{ID: uuid.New(), Email: "test1@example.com"},
+		{ID: uuid.New(), Email: "test2@example.com"},
+	}
+
+	mockRepo := &mocks.MockUserRepository{
+		ListFn: func(tid uuid.UUID) ([]*domain.User, error) {
+			if tid != tenantID {
+				t.Errorf("expected tenantID %v, got %v", tenantID, tid)
+			}
+			return expectedUsers, nil
+		},
+	}
+
+	svc := NewUserService(mockRepo)
+	users, err := svc.List(tenantID)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(users) != 2 {
+		t.Errorf("expected 2 users, got %d", len(users))
+	}
+}
+
+func TestUserService_List_Error(t *testing.T) {
+	tenantID := uuid.New()
+	mockRepo := &mocks.MockUserRepository{
+		ListFn: func(tid uuid.UUID) ([]*domain.User, error) {
+			return nil, errors.New("database error")
+		},
+	}
+
+	svc := NewUserService(mockRepo)
+	users, err := svc.List(tenantID)
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if users != nil {
+		t.Errorf("expected nil users, got %v", users)
+	}
+}
+
+// ─── GetByID ─────────────────────────────────────────────────────────────────
+
+func TestUserService_GetByID_Success(t *testing.T) {
+	userID := uuid.New()
+	expectedUser := &domain.User{ID: userID, Email: "test@example.com"}
+
+	mockRepo := &mocks.MockUserRepository{
+		FindByIDFn: func(id uuid.UUID) (*domain.User, error) {
+			if id != userID {
+				t.Errorf("expected userID %v, got %v", userID, id)
+			}
+			return expectedUser, nil
+		},
+	}
+
+	svc := NewUserService(mockRepo)
+	user, err := svc.GetByID(userID)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if user.ID != userID {
+		t.Errorf("expected user ID %v, got %v", userID, user.ID)
+	}
+}
+
+func TestUserService_GetByID_NotFound(t *testing.T) {
+	userID := uuid.New()
+	mockRepo := &mocks.MockUserRepository{
+		FindByIDFn: func(id uuid.UUID) (*domain.User, error) {
+			return nil, sql.ErrNoRows
+		},
+	}
+
+	svc := NewUserService(mockRepo)
+	user, err := svc.GetByID(userID)
+
+	if err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows, got %v", err)
+	}
+	if user != nil {
+		t.Errorf("expected nil user, got %v", user)
+	}
+}
+
+// ─── Create ──────────────────────────────────────────────────────────────────
+
+func TestUserService_Create_EmptyEmail(t *testing.T) {
+	mockRepo := &mocks.MockUserRepository{}
+	svc := NewUserService(mockRepo)
+
+	req := domain.UserCreateRequest{
+		Email:    "",
+		TenantID: uuid.New().String(),
+		FullName: "Test User",
+	}
+
+	user, err := svc.Create(req)
+	if err == nil {
+		t.Fatal("expected error for empty email, got nil")
+	}
+	if user != nil {
+		t.Errorf("expected nil user, got %v", user)
+	}
+}
+
+func TestUserService_Create_EmptyTenantID(t *testing.T) {
+	mockRepo := &mocks.MockUserRepository{}
+	svc := NewUserService(mockRepo)
+
+	req := domain.UserCreateRequest{
+		Email:    "test@example.com",
+		TenantID: "",
+		FullName: "Test User",
+	}
+
+	user, err := svc.Create(req)
+	if err == nil {
+		t.Fatal("expected error for empty tenantID, got nil")
+	}
+	if user != nil {
+		t.Errorf("expected nil user, got %v", user)
+	}
+}
+
+func TestUserService_Create_InvalidTenantIDFormat(t *testing.T) {
+	mockRepo := &mocks.MockUserRepository{}
+	svc := NewUserService(mockRepo)
+
+	req := domain.UserCreateRequest{
+		Email:    "test@example.com",
+		TenantID: "invalid-uuid",
+		FullName: "Test User",
+	}
+
+	user, err := svc.Create(req)
+	if err == nil {
+		t.Fatal("expected error for invalid tenantID, got nil")
+	}
+	if user != nil {
+		t.Errorf("expected nil user, got %v", user)
+	}
+}
+
+func TestUserService_Create_UserAlreadyExists(t *testing.T) {
+	tenantID := uuid.New()
+	existingUser := &domain.User{ID: uuid.New(), Email: "test@example.com"}
+
+	mockRepo := &mocks.MockUserRepository{
+		FindByEmailFn: func(email string) (*domain.User, error) {
+			return existingUser, nil
+		},
+	}
+
+	svc := NewUserService(mockRepo)
+	req := domain.UserCreateRequest{
+		Email:    "test@example.com",
+		TenantID: tenantID.String(),
+		FullName: "Test User",
+	}
+
+	user, err := svc.Create(req)
+	if err == nil || err.Error() != "user with this email already exists" {
+		t.Fatalf("expected 'user already exists' error, got %v", err)
+	}
+	if user != nil {
+		t.Errorf("expected nil user, got %v", user)
+	}
+}
+
+func TestUserService_Create_Success(t *testing.T) {
+	tenantID := uuid.New()
+	roleID := uuid.New()
+	roleIDStr := roleID.String()
+
+	createdUser := &domain.User{
+		ID:       uuid.New(),
+		TenantID: tenantID,
+		Email:    "test@example.com",
+		FullName: "Test User",
+		RoleID:   &roleID,
+		IsActive: true,
+	}
+
+	mockRepo := &mocks.MockUserRepository{
+		FindByEmailFn: func(email string) (*domain.User, error) {
+			return nil, sql.ErrNoRows
+		},
+		CreateFn: func(user *domain.User) error {
+			if user.Email != "test@example.com" {
+				t.Errorf("expected email test@example.com, got %s", user.Email)
+			}
+			if user.TenantID != tenantID {
+				t.Errorf("expected tenantID %v, got %v", tenantID, user.TenantID)
+			}
+			return nil
+		},
+		AddUserRoleFn: func(userID, roleID uuid.UUID) error {
+			return nil
+		},
+		FindByIDFn: func(id uuid.UUID) (*domain.User, error) {
+			return createdUser, nil
+		},
+	}
+
+	svc := NewUserService(mockRepo)
+	req := domain.UserCreateRequest{
+		Email:    "test@example.com",
+		TenantID: tenantID.String(),
+		FullName: "Test User",
+		RoleID:   &roleIDStr,
+	}
+
+	user, err := svc.Create(req)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if user == nil {
+		t.Fatal("expected user, got nil")
+	}
+	if user.Email != "test@example.com" {
+		t.Errorf("expected email test@example.com, got %s", user.Email)
+	}
+}
+
+func TestUserService_Create_FindByEmailError(t *testing.T) {
+	mockRepo := &mocks.MockUserRepository{
+		FindByEmailFn: func(email string) (*domain.User, error) {
+			return nil, errors.New("database error")
+		},
+	}
+
+	svc := NewUserService(mockRepo)
+	req := domain.UserCreateRequest{
+		Email:    "test@example.com",
+		TenantID: uuid.New().String(),
+		FullName: "Test User",
+	}
+
+	user, err := svc.Create(req)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if user != nil {
+		t.Errorf("expected nil user, got %v", user)
+	}
+}
+
+func TestUserService_Create_CreateError(t *testing.T) {
+	tenantID := uuid.New()
+
+	mockRepo := &mocks.MockUserRepository{
+		FindByEmailFn: func(email string) (*domain.User, error) {
+			return nil, sql.ErrNoRows
+		},
+		CreateFn: func(user *domain.User) error {
+			return errors.New("create failed")
+		},
+	}
+
+	svc := NewUserService(mockRepo)
+	req := domain.UserCreateRequest{
+		Email:    "test@example.com",
+		TenantID: tenantID.String(),
+		FullName: "Test User",
+	}
+
+	user, err := svc.Create(req)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if user != nil {
+		t.Errorf("expected nil user, got %v", user)
+	}
+}
+
+// ─── Update ──────────────────────────────────────────────────────────────────
+
+func TestUserService_Update_Success(t *testing.T) {
+	userID := uuid.New()
+	name := "Updated Name"
+	req := domain.UserUpdateRequest{
+		FullName: &name,
+	}
+
+	updatedUser := &domain.User{
+		ID:       userID,
+		Email:    "test@example.com",
+		FullName: "Updated Name",
+	}
+
+	mockRepo := &mocks.MockUserRepository{
+		UpdateFn: func(id uuid.UUID, r domain.UserUpdateRequest) (*domain.User, error) {
+			if id != userID {
+				t.Errorf("expected userID %v, got %v", userID, id)
+			}
+			return updatedUser, nil
+		},
+	}
+
+	svc := NewUserService(mockRepo)
+	user, err := svc.Update(userID, req)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if user.FullName != "Updated Name" {
+		t.Errorf("expected FullName 'Updated Name', got %s", user.FullName)
+	}
+}
+
+func TestUserService_Update_Error(t *testing.T) {
+	userID := uuid.New()
+	name := "Updated Name"
+	req := domain.UserUpdateRequest{
+		FullName: &name,
+	}
+
+	mockRepo := &mocks.MockUserRepository{
+		UpdateFn: func(id uuid.UUID, r domain.UserUpdateRequest) (*domain.User, error) {
+			return nil, errors.New("update failed")
+		},
+	}
+
+	svc := NewUserService(mockRepo)
+	user, err := svc.Update(userID, req)
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if user != nil {
+		t.Errorf("expected nil user, got %v", user)
+	}
+}
+
+// ─── Delete ──────────────────────────────────────────────────────────────────
+
+func TestUserService_Delete_Success(t *testing.T) {
+	userID := uuid.New()
+
+	mockRepo := &mocks.MockUserRepository{
+		DeleteFn: func(id uuid.UUID) error {
+			if id != userID {
+				t.Errorf("expected userID %v, got %v", userID, id)
+			}
+			return nil
+		},
+	}
+
+	svc := NewUserService(mockRepo)
+	err := svc.Delete(userID)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+func TestUserService_Delete_Error(t *testing.T) {
+	userID := uuid.New()
+
+	mockRepo := &mocks.MockUserRepository{
+		DeleteFn: func(id uuid.UUID) error {
+			return errors.New("delete failed")
+		},
+	}
+
+	svc := NewUserService(mockRepo)
+	err := svc.Delete(userID)
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}

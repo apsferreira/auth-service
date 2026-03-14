@@ -167,6 +167,36 @@ func (h *AuthHandler) Me(c *fiber.Ctx) error {
 	return c.Status(200).JSON(user)
 }
 
+// UpdateMe handles PATCH /api/v1/auth/me (protected)
+func (h *AuthHandler) UpdateMe(c *fiber.Ctx) error {
+	userIDStr, ok := c.Locals("userID").(string)
+	if !ok {
+		return c.Status(401).JSON(domain.ErrorResponse{Error: "unauthorized"})
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return c.Status(400).JSON(domain.ErrorResponse{Error: "invalid user ID"})
+	}
+
+	var req struct {
+		FullName string `json:"full_name"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(domain.ErrorResponse{Error: "invalid request body"})
+	}
+	if req.FullName == "" {
+		return c.Status(400).JSON(domain.ErrorResponse{Error: "full_name is required"})
+	}
+
+	user, err := h.authService.UpdateCurrentUser(userID, req.FullName)
+	if err != nil {
+		return c.Status(500).JSON(domain.ErrorResponse{Error: "failed to update profile"})
+	}
+
+	return c.Status(200).JSON(user)
+}
+
 // AdminLogin handles POST /api/v1/auth/admin-login (username/password for admin panel)
 func (h *AuthHandler) AdminLogin(c *fiber.Ctx) error {
 	var req domain.AdminLoginRequest

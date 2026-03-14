@@ -1,0 +1,457 @@
+package service
+
+import (
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/apsferreira/auth-service/backend/internal/domain"
+	"github.com/apsferreira/auth-service/backend/internal/repository/mocks"
+	"github.com/google/uuid"
+)
+
+func createTestAdminService() (*AdminService, *mocks.MockServiceRepository, *mocks.MockPermissionRepository, *mocks.MockRoleRepository) {
+	mockServiceRepo := &mocks.MockServiceRepository{}
+	mockPermissionRepo := &mocks.MockPermissionRepository{}
+	mockRoleRepo := &mocks.MockRoleRepository{}
+
+	adminSvc := NewAdminService(mockServiceRepo, mockPermissionRepo, mockRoleRepo)
+	return adminSvc, mockServiceRepo, mockPermissionRepo, mockRoleRepo
+}
+
+// ─── CreateService ───────────────────────────────────────────────────────────
+
+func TestAdminService_CreateService_Success(t *testing.T) {
+	adminSvc, mockServiceRepo, _, _ := createTestAdminService()
+
+	tenantID := uuid.New()
+	req := domain.ServiceCreateRequest{
+		Name:        "Test Service",
+		Slug:        "test-service",
+		Description: "A test service",
+	}
+
+	mockServiceRepo.CreateFn = func(service *domain.Service) error {
+		if service.Name != req.Name {
+			t.Errorf("expected name %s, got %s", req.Name, service.Name)
+		}
+		return nil
+	}
+
+	service, err := adminSvc.CreateService(tenantID, req)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if service == nil {
+		t.Fatal("expected service, got nil")
+	}
+}
+
+func TestAdminService_CreateService_EmptyName(t *testing.T) {
+	adminSvc, _, _, _ := createTestAdminService()
+
+	req := domain.ServiceCreateRequest{
+		Name: "",
+		Slug: "test",
+	}
+
+	_, err := adminSvc.CreateService(uuid.New(), req)
+
+	if err == nil {
+		t.Fatal("expected error for empty name, got nil")
+	}
+	if !strings.Contains(err.Error(), "name and slug are required") {
+		t.Errorf("expected 'name and slug are required' error, got: %v", err)
+	}
+}
+
+func TestAdminService_CreateService_CreateError(t *testing.T) {
+	adminSvc, mockServiceRepo, _, _ := createTestAdminService()
+
+	req := domain.ServiceCreateRequest{
+		Name: "Test",
+		Slug: "test",
+	}
+
+	mockServiceRepo.CreateFn = func(service *domain.Service) error {
+		return errors.New("create failed")
+	}
+
+	_, err := adminSvc.CreateService(uuid.New(), req)
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to create service") {
+		t.Errorf("expected 'failed to create service' error, got: %v", err)
+	}
+}
+
+// ─── GetService / ListServices / UpdateService / DeleteService ──────────────
+
+func TestAdminService_GetService_Success(t *testing.T) {
+	adminSvc, mockServiceRepo, _, _ := createTestAdminService()
+
+	serviceID := uuid.New()
+	expectedService := &domain.Service{
+		ID:   serviceID,
+		Name: "Test Service",
+	}
+
+	mockServiceRepo.FindByIDFn = func(id uuid.UUID) (*domain.Service, error) {
+		return expectedService, nil
+	}
+
+	service, err := adminSvc.GetService(serviceID)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if service.ID != serviceID {
+		t.Error("expected service with correct ID")
+	}
+}
+
+func TestAdminService_ListServices_Success(t *testing.T) {
+	adminSvc, mockServiceRepo, _, _ := createTestAdminService()
+
+	tenantID := uuid.New()
+	expectedServices := []*domain.Service{
+		{ID: uuid.New(), Name: "Service 1"},
+		{ID: uuid.New(), Name: "Service 2"},
+	}
+
+	mockServiceRepo.ListFn = func(tid uuid.UUID) ([]*domain.Service, error) {
+		return expectedServices, nil
+	}
+
+	services, err := adminSvc.ListServices(tenantID)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(services) != 2 {
+		t.Errorf("expected 2 services, got %d", len(services))
+	}
+}
+
+func TestAdminService_UpdateService_Success(t *testing.T) {
+	adminSvc, mockServiceRepo, _, _ := createTestAdminService()
+
+	serviceID := uuid.New()
+	req := domain.ServiceUpdateRequest{}
+
+	mockServiceRepo.UpdateFn = func(id uuid.UUID, r domain.ServiceUpdateRequest) (*domain.Service, error) {
+		return &domain.Service{ID: id}, nil
+	}
+
+	service, err := adminSvc.UpdateService(serviceID, req)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if service.ID != serviceID {
+		t.Error("expected service with correct ID")
+	}
+}
+
+func TestAdminService_DeleteService_Success(t *testing.T) {
+	adminSvc, mockServiceRepo, _, _ := createTestAdminService()
+
+	serviceID := uuid.New()
+
+	mockServiceRepo.DeleteFn = func(id uuid.UUID) error {
+		return nil
+	}
+
+	err := adminSvc.DeleteService(serviceID)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+// ─── CreatePermission ────────────────────────────────────────────────────────
+
+func TestAdminService_CreatePermission_Success(t *testing.T) {
+	adminSvc, mockServiceRepo, mockPermissionRepo, _ := createTestAdminService()
+
+	serviceID := uuid.New()
+	req := domain.PermissionCreateRequest{
+		Name:     "Read Users",
+		Resource: "users",
+		Action:   "read",
+	}
+
+	mockServiceRepo.FindByIDFn = func(id uuid.UUID) (*domain.Service, error) {
+		return &domain.Service{ID: id}, nil
+	}
+	mockPermissionRepo.CreateFn = func(perm *domain.Permission) error {
+		return nil
+	}
+
+	perm, err := adminSvc.CreatePermission(serviceID, req)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if perm == nil {
+		t.Fatal("expected permission, got nil")
+	}
+}
+
+func TestAdminService_CreatePermission_EmptyFields(t *testing.T) {
+	adminSvc, _, _, _ := createTestAdminService()
+
+	req := domain.PermissionCreateRequest{
+		Name:     "",
+		Resource: "users",
+		Action:   "read",
+	}
+
+	_, err := adminSvc.CreatePermission(uuid.New(), req)
+
+	if err == nil {
+		t.Fatal("expected error for empty name, got nil")
+	}
+}
+
+func TestAdminService_CreatePermission_ServiceNotFound(t *testing.T) {
+	adminSvc, mockServiceRepo, _, _ := createTestAdminService()
+
+	req := domain.PermissionCreateRequest{
+		Name:     "Read Users",
+		Resource: "users",
+		Action:   "read",
+	}
+
+	mockServiceRepo.FindByIDFn = func(id uuid.UUID) (*domain.Service, error) {
+		return nil, errors.New("not found")
+	}
+
+	_, err := adminSvc.CreatePermission(uuid.New(), req)
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "service not found") {
+		t.Errorf("expected 'service not found' error, got: %v", err)
+	}
+}
+
+// ─── ListPermissionsByService / ListAllPermissions / DeletePermission ────────
+
+func TestAdminService_ListPermissionsByService_Success(t *testing.T) {
+	adminSvc, _, mockPermissionRepo, _ := createTestAdminService()
+
+	serviceID := uuid.New()
+	expectedPerms := []*domain.Permission{
+		{ID: uuid.New(), Name: "Perm 1"},
+	}
+
+	mockPermissionRepo.ListByServiceFn = func(sid uuid.UUID) ([]*domain.Permission, error) {
+		return expectedPerms, nil
+	}
+
+	perms, err := adminSvc.ListPermissionsByService(serviceID)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(perms) != 1 {
+		t.Errorf("expected 1 permission, got %d", len(perms))
+	}
+}
+
+func TestAdminService_ListAllPermissions_Success(t *testing.T) {
+	adminSvc, _, mockPermissionRepo, _ := createTestAdminService()
+
+	expectedPerms := []*domain.Permission{
+		{ID: uuid.New(), Name: "Perm 1"},
+		{ID: uuid.New(), Name: "Perm 2"},
+	}
+
+	mockPermissionRepo.ListAllFn = func() ([]*domain.Permission, error) {
+		return expectedPerms, nil
+	}
+
+	perms, err := adminSvc.ListAllPermissions()
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(perms) != 2 {
+		t.Errorf("expected 2 permissions, got %d", len(perms))
+	}
+}
+
+func TestAdminService_DeletePermission_Success(t *testing.T) {
+	adminSvc, _, mockPermissionRepo, _ := createTestAdminService()
+
+	permID := uuid.New()
+
+	mockPermissionRepo.DeleteFn = func(id uuid.UUID) error {
+		return nil
+	}
+
+	err := adminSvc.DeletePermission(permID)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+// ─── CreateRole ──────────────────────────────────────────────────────────────
+
+func TestAdminService_CreateRole_Success(t *testing.T) {
+	adminSvc, _, _, mockRoleRepo := createTestAdminService()
+
+	tenantID := uuid.New()
+	req := domain.RoleCreateRequest{
+		Name:        "Admin",
+		Description: "Administrator role",
+		Level:       100,
+	}
+
+	mockRoleRepo.CreateFn = func(role *domain.Role) error {
+		return nil
+	}
+
+	role, err := adminSvc.CreateRole(tenantID, req)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if role == nil {
+		t.Fatal("expected role, got nil")
+	}
+	if role.Name != "Admin" {
+		t.Errorf("expected name Admin, got %s", role.Name)
+	}
+}
+
+func TestAdminService_CreateRole_EmptyName(t *testing.T) {
+	adminSvc, _, _, _ := createTestAdminService()
+
+	req := domain.RoleCreateRequest{
+		Name: "",
+	}
+
+	_, err := adminSvc.CreateRole(uuid.New(), req)
+
+	if err == nil {
+		t.Fatal("expected error for empty name, got nil")
+	}
+	if !strings.Contains(err.Error(), "name is required") {
+		t.Errorf("expected 'name is required' error, got: %v", err)
+	}
+}
+
+func TestAdminService_CreateRole_CreateError(t *testing.T) {
+	adminSvc, _, _, mockRoleRepo := createTestAdminService()
+
+	req := domain.RoleCreateRequest{
+		Name: "Admin",
+	}
+
+	mockRoleRepo.CreateFn = func(role *domain.Role) error {
+		return errors.New("create failed")
+	}
+
+	_, err := adminSvc.CreateRole(uuid.New(), req)
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to create role") {
+		t.Errorf("expected 'failed to create role' error, got: %v", err)
+	}
+}
+
+// ─── ListRoles / UpdateRole ──────────────────────────────────────────────────
+
+func TestAdminService_ListRoles_Success(t *testing.T) {
+	adminSvc, _, _, mockRoleRepo := createTestAdminService()
+
+	tenantID := uuid.New()
+	expectedRoles := []*domain.Role{
+		{ID: uuid.New(), Name: "Role 1"},
+		{ID: uuid.New(), Name: "Role 2"},
+	}
+
+	mockRoleRepo.ListFn = func(tid uuid.UUID) ([]*domain.Role, error) {
+		return expectedRoles, nil
+	}
+
+	roles, err := adminSvc.ListRoles(tenantID)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(roles) != 2 {
+		t.Errorf("expected 2 roles, got %d", len(roles))
+	}
+}
+
+func TestAdminService_UpdateRole_Success(t *testing.T) {
+	adminSvc, _, _, mockRoleRepo := createTestAdminService()
+
+	roleID := uuid.New()
+	req := domain.RoleUpdateRequest{}
+
+	mockRoleRepo.UpdateFn = func(id uuid.UUID, r domain.RoleUpdateRequest) (*domain.Role, error) {
+		return &domain.Role{ID: id}, nil
+	}
+
+	role, err := adminSvc.UpdateRole(roleID, req)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if role.ID != roleID {
+		t.Error("expected role with correct ID")
+	}
+}
+
+// ─── GetRolePermissions / SetRolePermissions ─────────────────────────────────
+
+func TestAdminService_GetRolePermissions_Success(t *testing.T) {
+	adminSvc, _, mockPermissionRepo, _ := createTestAdminService()
+
+	roleID := uuid.New()
+	expectedIDs := []uuid.UUID{uuid.New(), uuid.New()}
+
+	mockPermissionRepo.GetRolePermissionIDsFn = func(rid uuid.UUID) ([]uuid.UUID, error) {
+		return expectedIDs, nil
+	}
+
+	ids, err := adminSvc.GetRolePermissions(roleID)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(ids) != 2 {
+		t.Errorf("expected 2 permission IDs, got %d", len(ids))
+	}
+}
+
+func TestAdminService_SetRolePermissions_Success(t *testing.T) {
+	adminSvc, _, mockPermissionRepo, _ := createTestAdminService()
+
+	roleID := uuid.New()
+	permissionIDs := []uuid.UUID{uuid.New(), uuid.New()}
+
+	mockPermissionRepo.SetRolePermissionsFn = func(rid uuid.UUID, pids []uuid.UUID) error {
+		if len(pids) != 2 {
+			t.Errorf("expected 2 permission IDs, got %d", len(pids))
+		}
+		return nil
+	}
+
+	err := adminSvc.SetRolePermissions(roleID, permissionIDs)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}

@@ -1,0 +1,59 @@
+package mocks
+
+import (
+	"time"
+
+	"github.com/apsferreira/auth-service/backend/internal/domain"
+	"github.com/google/uuid"
+)
+
+type MockOTPRepository struct {
+	CreateFn               func(otp *domain.OTPCode) error
+	FindLatestByEmailFn    func(email string) (*domain.OTPCode, error)
+	IncrementAttemptsFn    func(id uuid.UUID) error
+	DeleteByEmailFn        func(email string) error
+	DeleteExpiredFn        func() error
+	CountRecentByEmailFn   func(email string, since time.Time) (int, error)
+}
+
+func (m *MockOTPRepository) Create(otp *domain.OTPCode) error {
+	if m.CreateFn != nil {
+		return m.CreateFn(otp)
+	}
+	return nil
+}
+
+func (m *MockOTPRepository) FindLatestByEmail(email string) (*domain.OTPCode, error) {
+	if m.FindLatestByEmailFn != nil {
+		return m.FindLatestByEmailFn(email)
+	}
+	return nil, nil
+}
+
+func (m *MockOTPRepository) IncrementAttempts(id uuid.UUID) error {
+	if m.IncrementAttemptsFn != nil {
+		return m.IncrementAttemptsFn(id)
+	}
+	return nil
+}
+
+func (m *MockOTPRepository) DeleteByEmail(email string) error {
+	if m.DeleteByEmailFn != nil {
+		return m.DeleteByEmailFn(email)
+	}
+	return nil
+}
+
+func (m *MockOTPRepository) DeleteExpired() error {
+	if m.DeleteExpiredFn != nil {
+		return m.DeleteExpiredFn()
+	}
+	return nil
+}
+
+func (m *MockOTPRepository) CountRecentByEmail(email string, since time.Time) (int, error) {
+	if m.CountRecentByEmailFn != nil {
+		return m.CountRecentByEmailFn(email, since)
+	}
+	return 0, nil
+}

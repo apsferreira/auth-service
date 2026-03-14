@@ -151,6 +151,15 @@ func (r *UserRepository) UpdateLastLogin(userID uuid.UUID) error {
 	return err
 }
 
+func (r *UserRepository) UpdateProfile(id uuid.UUID, fullName string) (*domain.User, error) {
+	query := `UPDATE users SET full_name = $1, updated_at = $2 WHERE id = $3`
+	_, err := database.DB.Exec(query, fullName, time.Now(), id)
+	if err != nil {
+		return nil, err
+	}
+	return r.FindByID(id)
+}
+
 func (r *UserRepository) List(tenantID uuid.UUID) ([]*domain.User, error) {
 	query := `SELECT id, tenant_id, email, full_name, avatar_url, is_active, role_id,
 	          created_at, updated_at, last_login_at

@@ -1,0 +1,113 @@
+package mocks
+
+import (
+	"github.com/apsferreira/auth-service/backend/internal/domain"
+	"github.com/google/uuid"
+)
+
+type MockUserRepository struct {
+	FindByEmailFn                   func(email string) (*domain.User, error)
+	FindByIDFn                      func(id uuid.UUID) (*domain.User, error)
+	FindByUsernameOrEmailFn         func(identifier string) (*domain.User, error)
+	CreateFn                        func(user *domain.User) error
+	UpdateFn                        func(id uuid.UUID, req domain.UserUpdateRequest) (*domain.User, error)
+	DeleteFn                        func(id uuid.UUID) error
+	ListFn                          func(tenantID uuid.UUID) ([]*domain.User, error)
+	SetPasswordFn                   func(userID uuid.UUID, hash string) error
+	UpdateLastLoginFn               func(userID uuid.UUID) error
+	AddUserRoleFn                   func(userID, roleID uuid.UUID) error
+	GetUserRolesAndPermissionsFn    func(userID uuid.UUID) (roles []string, permissions map[string][]string, err error)
+	GetDefaultTenantIDFn            func() (uuid.UUID, error)
+	GetDefaultRoleIDFn              func(tenantID uuid.UUID) (uuid.UUID, error)
+}
+
+func (m *MockUserRepository) FindByEmail(email string) (*domain.User, error) {
+	if m.FindByEmailFn != nil {
+		return m.FindByEmailFn(email)
+	}
+	return nil, nil
+}
+
+func (m *MockUserRepository) FindByID(id uuid.UUID) (*domain.User, error) {
+	if m.FindByIDFn != nil {
+		return m.FindByIDFn(id)
+	}
+	return nil, nil
+}
+
+func (m *MockUserRepository) FindByUsernameOrEmail(identifier string) (*domain.User, error) {
+	if m.FindByUsernameOrEmailFn != nil {
+		return m.FindByUsernameOrEmailFn(identifier)
+	}
+	return nil, nil
+}
+
+func (m *MockUserRepository) Create(user *domain.User) error {
+	if m.CreateFn != nil {
+		return m.CreateFn(user)
+	}
+	return nil
+}
+
+func (m *MockUserRepository) Update(id uuid.UUID, req domain.UserUpdateRequest) (*domain.User, error) {
+	if m.UpdateFn != nil {
+		return m.UpdateFn(id, req)
+	}
+	return nil, nil
+}
+
+func (m *MockUserRepository) Delete(id uuid.UUID) error {
+	if m.DeleteFn != nil {
+		return m.DeleteFn(id)
+	}
+	return nil
+}
+
+func (m *MockUserRepository) List(tenantID uuid.UUID) ([]*domain.User, error) {
+	if m.ListFn != nil {
+		return m.ListFn(tenantID)
+	}
+	return nil, nil
+}
+
+func (m *MockUserRepository) SetPassword(userID uuid.UUID, hash string) error {
+	if m.SetPasswordFn != nil {
+		return m.SetPasswordFn(userID, hash)
+	}
+	return nil
+}
+
+func (m *MockUserRepository) UpdateLastLogin(userID uuid.UUID) error {
+	if m.UpdateLastLoginFn != nil {
+		return m.UpdateLastLoginFn(userID)
+	}
+	return nil
+}
+
+func (m *MockUserRepository) AddUserRole(userID, roleID uuid.UUID) error {
+	if m.AddUserRoleFn != nil {
+		return m.AddUserRoleFn(userID, roleID)
+	}
+	return nil
+}
+
+func (m *MockUserRepository) GetUserRolesAndPermissions(userID uuid.UUID) (roles []string, permissions map[string][]string, err error) {
+	if m.GetUserRolesAndPermissionsFn != nil {
+		return m.GetUserRolesAndPermissionsFn(userID)
+	}
+	return nil, nil, nil
+}
+
+func (m *MockUserRepository) GetDefaultTenantID() (uuid.UUID, error) {
+	if m.GetDefaultTenantIDFn != nil {
+		return m.GetDefaultTenantIDFn()
+	}
+	return uuid.Nil, nil
+}
+
+func (m *MockUserRepository) GetDefaultRoleID(tenantID uuid.UUID) (uuid.UUID, error) {
+	if m.GetDefaultRoleIDFn != nil {
+		return m.GetDefaultRoleIDFn(tenantID)
+	}
+	return uuid.Nil, nil
+}

@@ -1,0 +1,32 @@
+package mocks
+
+import (
+	"github.com/apsferreira/auth-service/backend/internal/domain"
+)
+
+type MockEventRepository struct {
+	CreateFn            func(e *domain.AuthEvent) error
+	ListFn              func(f domain.AuthEventFilter) ([]*domain.AuthEvent, int64, error)
+	DeleteOlderThanFn   func(days int) error
+}
+
+func (m *MockEventRepository) Create(e *domain.AuthEvent) error {
+	if m.CreateFn != nil {
+		return m.CreateFn(e)
+	}
+	return nil
+}
+
+func (m *MockEventRepository) List(f domain.AuthEventFilter) ([]*domain.AuthEvent, int64, error) {
+	if m.ListFn != nil {
+		return m.ListFn(f)
+	}
+	return nil, 0, nil
+}
+
+func (m *MockEventRepository) DeleteOlderThan(days int) error {
+	if m.DeleteOlderThanFn != nil {
+		return m.DeleteOlderThanFn(days)
+	}
+	return nil
+}
