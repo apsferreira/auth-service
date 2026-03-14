@@ -45,7 +45,6 @@ func (s *GoogleOAuthService) GetAuthURL(state string) string {
 	params.Set("scope", "openid email profile")
 	params.Set("state", state)
 	params.Set("access_type", "online")
-	params.Set("prompt", "select_account")
 	return "https://accounts.google.com/o/oauth2/v2/auth?" + params.Encode()
 }
 
