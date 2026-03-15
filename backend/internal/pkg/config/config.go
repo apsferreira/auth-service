@@ -23,6 +23,9 @@ type Config struct {
 	OTPRateLimitPerEmail      int
 	OTPRateLimitWindowMinutes int
 	ServiceToken              string // shared secret for service-to-service calls
+	ServiceName               string // human-readable name used in notification payloads
+	NotificationServiceURL    string // URL for notification service API
+	RabbitMQURL               string // amqp://user:pass@host:5672/
 	// Google OAuth2
 	GoogleClientID     string
 	GoogleClientSecret string
@@ -53,6 +56,9 @@ func Load() *Config {
 		OTPRateLimitPerEmail:      getIntEnv("OTP_RATE_LIMIT_PER_EMAIL", 3),
 		OTPRateLimitWindowMinutes: getIntEnv("OTP_RATE_LIMIT_WINDOW_MINUTES", 15),
 		ServiceToken:              getEnv("SERVICE_TOKEN", "service-secret-change-in-production"),
+		ServiceName:               getEnv("SERVICE_NAME", "Instituto Itinerante"),
+		NotificationServiceURL:    getEnv("NOTIFICATION_SERVICE_URL", "http://localhost:3030"),
+		RabbitMQURL:               getEnv("RABBITMQ_URL", ""),
 		GoogleClientID:            getEnv("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret:        getEnv("GOOGLE_CLIENT_SECRET", ""),
 		GoogleRedirectURI:         getEnv("GOOGLE_REDIRECT_URI", ""),

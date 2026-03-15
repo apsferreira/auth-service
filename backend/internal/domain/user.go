@@ -82,16 +82,7 @@ type Service struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
-// OTPCode represents a one-time password stored in the database
-type OTPCode struct {
-	ID        uuid.UUID `json:"id"`
-	Email     string    `json:"email"`
-	CodeHash  string    `json:"-"`
-	Channel   string    `json:"channel"`
-	Attempts  int       `json:"attempts"`
-	ExpiresAt time.Time `json:"expires_at"`
-	CreatedAt time.Time `json:"created_at"`
-}
+
 
 // OAuthIdentity links a user to a social login provider account
 type OAuthIdentity struct {

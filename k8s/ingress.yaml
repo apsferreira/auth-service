@@ -1,14 +1,21 @@
 # =============================================================================
 # IngressRoute — Auth Service
 # Traefik v3 + Cloudflare Tunnel
-# TLS terminado no Cloudflare (sem certResolver no IngressRoute)
 #
-# Segurança:
-#   auth.institutoitinerante.com.br       → API pública (OTP, login)
-#   admin-auth.institutoitinerante.com.br → Frontend admin (protegido por Cloudflare Access)
+# Arquitetura de exposição:
+#   auth.institutoitinerante.com.br/api/* → Backend API (OTP, login, validate)
+#   auth.institutoitinerante.com.br/*     → Frontend Admin (SPA React)
+#
+# Segurança (Cloudflare Access):
+#   - REGRA DE BYPASS: /api/v1/auth/* → público (OTP, login, validate chamados por mobile/frontend)
+#   - REGRA PADRÃO: /* → exige autenticação (protege o admin panel)
+#
+# Motivação para hostname único:
+#   - Mobile apps (React Native) e frontends (Libri, Nitro) chamam auth.institutoitinerante.com.br/api
+#   - Admin panel consolidado no mesmo domínio, sem subdomain admin-auth separado
 # =============================================================================
 
-# Backend API: auth.institutoitinerante.com.br
+# API Backend: auth.institutoitinerante.com.br/api/*
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -19,15 +26,15 @@ spec:
     - web
     - websecure
   routes:
-    - match: Host(`auth.institutoitinerante.com.br`)
+    - match: Host(`auth.institutoitinerante.com.br`) && PathPrefix(`/api`)
       kind: Rule
       services:
         - name: authservice-backend
           port: 3010
 
 ---
-# Frontend Admin: admin-auth.institutoitinerante.com.br
-# Protegido por Cloudflare Access (autenticação obrigatória antes de chegar aqui)
+# Frontend Admin: auth.institutoitinerante.com.br (SPA React)
+# Cloudflare Access protege /* com bypass em /api/*
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -38,8 +45,9 @@ spec:
     - web
     - websecure
   routes:
-    - match: Host(`admin-auth.institutoitinerante.com.br`)
+    - match: Host(`auth.institutoitinerante.com.br`)
       kind: Rule
+      priority: 1
       services:
         - name: authservice-frontend
           port: 80

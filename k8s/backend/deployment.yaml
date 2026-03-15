@@ -91,6 +91,14 @@ spec:
               optional: true
         - name: GOOGLE_REDIRECT_URI
           value: "https://auth.institutoitinerante.com.br/api/v1/auth/google/callback"
+        - name: NOTIFICATION_SERVICE_URL
+          value: "http://notification-service.production.svc.cluster.local:3030"
+        - name: RABBITMQ_URL
+          valueFrom:
+            secretKeyRef:
+              name: authservice-secrets
+              key: rabbitmq-url
+              optional: true
         resources:
           requests:
             memory: "128Mi"

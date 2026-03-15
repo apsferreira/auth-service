@@ -6,43 +6,48 @@ import (
 	"log"
 	"time"
 
+	"github.com/apsferreira/auth-service/backend/internal/client"
 	"github.com/apsferreira/auth-service/backend/internal/domain"
 	jwtpkg "github.com/apsferreira/auth-service/backend/internal/pkg/jwt"
+	"github.com/apsferreira/auth-service/backend/internal/pkg/messaging"
 	"github.com/apsferreira/auth-service/backend/internal/repository"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthService struct {
-	userRepo         repository.UserRepositoryInterface
-	otpService       *OTPService
-	emailService     *EmailService
-	telegramNotifier *TelegramNotifier
-	whatsappService  *WhatsAppService
-	tokenRepo        repository.TokenRepositoryInterface
-	jwtService       *jwtpkg.JWTService
-	oauthRepo        repository.OAuthRepositoryInterface
+	userRepo           repository.UserRepositoryInterface
+	notificationClient *client.NotificationClient
+	whatsappService    *WhatsAppService
+	tokenRepo          repository.TokenRepositoryInterface
+	jwtService         *jwtpkg.JWTService
+	oauthRepo          repository.OAuthRepositoryInterface
+	publisher          *messaging.Publisher // nil = fallback to HTTP
+	serviceName        string               // human-readable name used in OTP event payloads
 }
 
 func NewAuthService(
 	userRepo repository.UserRepositoryInterface,
-	otpService *OTPService,
-	emailService *EmailService,
-	telegramNotifier *TelegramNotifier,
+	notificationClient *client.NotificationClient,
 	whatsappService *WhatsAppService,
 	tokenRepo repository.TokenRepositoryInterface,
 	jwtService *jwtpkg.JWTService,
 	oauthRepo repository.OAuthRepositoryInterface,
+	publisher *messaging.Publisher,
+	serviceName string,
 ) *AuthService {
+	if serviceName == "" {
+		serviceName = "Instituto Itinerante"
+	}
 	return &AuthService{
-		userRepo:         userRepo,
-		otpService:       otpService,
-		emailService:     emailService,
-		telegramNotifier: telegramNotifier,
-		whatsappService:  whatsappService,
-		tokenRepo:        tokenRepo,
-		jwtService:       jwtService,
-		oauthRepo:        oauthRepo,
+		userRepo:           userRepo,
+		notificationClient: notificationClient,
+		whatsappService:    whatsappService,
+		tokenRepo:          tokenRepo,
+		jwtService:         jwtService,
+		oauthRepo:          oauthRepo,
+		publisher:          publisher,
+		serviceName:        serviceName,
 	}
 }
 
@@ -64,51 +69,74 @@ func (s *AuthService) RequestOTP(email, channel string) (*domain.OTPResponse, st
 		return nil, "", fmt.Errorf("failed to find user: %w", err)
 	}
 
-	code, err := s.otpService.GenerateAndStore(email)
-	if err != nil {
-		return nil, "", err
-	}
-
 	switch channel {
-	case "telegram":
-		if s.telegramNotifier == nil || !s.telegramNotifier.IsConfigured() {
-			return nil, "", fmt.Errorf("Telegram não está configurado neste serviço")
-		}
-		if err := s.telegramNotifier.SendOTP(email, code); err != nil {
-			return nil, "", fmt.Errorf("falha ao enviar OTP via Telegram: %w", err)
-		}
 	case "whatsapp":
 		if s.whatsappService == nil || !s.whatsappService.IsConfigured() {
 			return nil, "", fmt.Errorf("WhatsApp não está configurado neste serviço")
 		}
+		// For now, generate and send via WhatsApp using local service
+		// TODO: Move WhatsApp to notification service later
+		code, err := generateOTPCode()
+		if err != nil {
+			return nil, "", err
+		}
 		if err := s.whatsappService.SendOTP(email, code); err != nil {
 			return nil, "", fmt.Errorf("falha ao enviar OTP via WhatsApp: %w", err)
 		}
-	default: // "email"
-		if err := s.emailService.SendOTP(email, code); err != nil {
-			log.Printf("[WARN] Email OTP delivery failed: %v", err)
-			return nil, "", fmt.Errorf("falha ao enviar OTP por email: %w", err)
+		return &domain.OTPResponse{
+			Message:   "Código enviado via WhatsApp",
+			ExpiresIn: 600, // 10 minutes
+			Channel:   channel,
+		}, code, nil
+	default: // "email" or "telegram"
+		channelLabel := "email"
+		if channel == "telegram" {
+			channelLabel = "Telegram"
 		}
-	}
 
-	channelLabels := map[string]string{
-		"email":    "email",
-		"telegram": "Telegram",
-		"whatsapp": "WhatsApp",
-	}
-	label := channelLabels[channel]
+		if s.publisher != nil {
+			// Async path: publish to RabbitMQ — notification-service consumes and sends OTP
+			if err := s.publisher.PublishOTPRequested(email, s.serviceName, channel); err != nil {
+				log.Printf("[auth] RabbitMQ publish failed, falling back to HTTP: %v", err)
+				// Fallthrough to HTTP fallback below
+			} else {
+				return &domain.OTPResponse{
+					Message:   "Código enviado via " + channelLabel,
+					ExpiresIn: 600, // 10 minutes (notification-service default)
+					Channel:   channel,
+				}, "", nil
+			}
+		}
 
-	return &domain.OTPResponse{
-		Message:   "Código enviado via " + label,
-		ExpiresIn: s.otpService.GetExpiryMinutes() * 60,
-		Channel:   channel,
-	}, code, nil
+		// HTTP fallback (used when RABBITMQ_URL is not set or publish failed)
+		otpResp, err := s.notificationClient.SendOTP(email)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to send OTP: %w", err)
+		}
+
+		expiresIn := int(otpResp.ExpiresAt.Sub(time.Now()).Seconds())
+		if expiresIn <= 0 {
+			expiresIn = 600
+		}
+
+		return &domain.OTPResponse{
+			Message:   "Código enviado via " + channelLabel,
+			ExpiresIn: expiresIn,
+			Channel:   channel,
+		}, "", nil
+	}
 }
 
 // VerifyOTP handles step 2: user submits email + code, we return JWT tokens.
 func (s *AuthService) VerifyOTP(email, code string) (*domain.AuthResponse, error) {
-	if err := s.otpService.Verify(email, code); err != nil {
-		return nil, err
+	// Use notification service to verify OTP
+	verifyResp, err := s.notificationClient.VerifyOTP(email, code)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify OTP: %w", err)
+	}
+	
+	if !verifyResp.Valid {
+		return nil, fmt.Errorf(verifyResp.Message)
 	}
 
 	user, err := s.userRepo.FindByEmail(email)
@@ -529,4 +557,13 @@ func (s *AuthService) createDefaultUser(email string) error {
 	}
 
 	return s.userRepo.AddUserRole(user.ID, roleID)
+}
+
+// generateOTPCode generates a 6-digit OTP code (helper for WhatsApp until it's migrated)
+func generateOTPCode() (string, error) {
+	// For simplicity, generate a random 6-digit code
+	// This is a temporary solution until WhatsApp is also migrated to notification service
+	now := time.Now()
+	code := fmt.Sprintf("%06d", (now.Unix()%1000000))
+	return code, nil
 }

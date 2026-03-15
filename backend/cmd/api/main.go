@@ -7,11 +7,13 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/apsferreira/auth-service/backend/internal/client"
 	"github.com/apsferreira/auth-service/backend/internal/handler"
 	"github.com/apsferreira/auth-service/backend/internal/middleware"
 	"github.com/apsferreira/auth-service/backend/internal/pkg/config"
 	"github.com/apsferreira/auth-service/backend/internal/pkg/database"
 	jwtpkg "github.com/apsferreira/auth-service/backend/internal/pkg/jwt"
+	"github.com/apsferreira/auth-service/backend/internal/pkg/messaging"
 	"github.com/apsferreira/auth-service/backend/internal/repository"
 	"github.com/apsferreira/auth-service/backend/internal/service"
 	"github.com/apsferreira/auth-service/backend/internal/telemetry"
@@ -33,13 +35,23 @@ func main() {
 
 	// 3. Initialize infrastructure services
 	jwtService := jwtpkg.NewJWTService(cfg.JWTSecret, cfg.JWTAccessExpiry, cfg.JWTRefreshExpiry)
-	emailService := service.NewEmailService(cfg.ResendAPIKey, cfg.ResendFromEmail, cfg.Env)
-	telegramNotifier := service.NewTelegramNotifier(cfg.TelegramBotToken, cfg.TelegramChatID)
+	notificationClient := client.NewNotificationClient(cfg.NotificationServiceURL)
 	whatsappService := service.NewWhatsAppService(cfg.WhatsAppAPIURL, cfg.WhatsAppAPIKey, cfg.WhatsAppInstance, cfg.WhatsAppDefaultPhone)
+
+	var publisher *messaging.Publisher
+	if cfg.RabbitMQURL != "" {
+		var err error
+		publisher, err = messaging.NewPublisher(cfg.RabbitMQURL)
+		if err != nil {
+			log.Printf("⚠️  RabbitMQ unavailable (%v) — OTP will use HTTP fallback", err)
+		} else {
+			defer publisher.Close()
+			log.Println("✅ RabbitMQ publisher connected (auth.events)")
+		}
+	}
 
 	// 4. Initialize repositories
 	userRepo := repository.NewUserRepository()
-	otpRepo := repository.NewOTPRepository()
 	tokenRepo := repository.NewTokenRepository()
 	oauthRepo := repository.NewOAuthRepository()
 	serviceRepo := repository.NewServiceRepository()
@@ -48,16 +60,9 @@ func main() {
 	eventRepo := repository.NewEventRepository()
 
 	// 5. Initialize services
-	otpService := service.NewOTPService(
-		otpRepo,
-		cfg.OTPExpiryMinutes,
-		cfg.OTPMaxAttempts,
-		cfg.OTPRateLimitPerEmail,
-		cfg.OTPRateLimitWindowMinutes,
-	)
 	eventService := service.NewEventService(eventRepo, cfg.Env == "development")
 	googleService := service.NewGoogleOAuthService(cfg.GoogleClientID, cfg.GoogleClientSecret, cfg.GoogleRedirectURI)
-	authService := service.NewAuthService(userRepo, otpService, emailService, telegramNotifier, whatsappService, tokenRepo, jwtService, oauthRepo)
+	authService := service.NewAuthService(userRepo, notificationClient, whatsappService, tokenRepo, jwtService, oauthRepo, publisher, cfg.ServiceName)
 	userService := service.NewUserService(userRepo)
 	adminService := service.NewAdminService(serviceRepo, permissionRepo, roleRepo)
 

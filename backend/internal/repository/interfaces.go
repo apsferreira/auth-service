@@ -25,15 +25,7 @@ type UserRepositoryInterface interface {
 	GetDefaultRoleID(tenantID uuid.UUID) (uuid.UUID, error)
 }
 
-// OTPRepositoryInterface defines the contract for OTP repository operations
-type OTPRepositoryInterface interface {
-	Create(otp *domain.OTPCode) error
-	FindLatestByEmail(email string) (*domain.OTPCode, error)
-	IncrementAttempts(id uuid.UUID) error
-	DeleteByEmail(email string) error
-	DeleteExpired() error
-	CountRecentByEmail(email string, since time.Time) (int, error)
-}
+
 
 // TokenRepositoryInterface defines the contract for token repository operations
 type TokenRepositoryInterface interface {
