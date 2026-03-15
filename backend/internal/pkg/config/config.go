@@ -15,8 +15,6 @@ type Config struct {
 	JWTSecret                 string
 	JWTAccessExpiry           time.Duration
 	JWTRefreshExpiry          time.Duration
-	ResendAPIKey              string
-	ResendFromEmail           string
 	AllowedOrigins            string
 	OTPExpiryMinutes          int
 	OTPMaxAttempts            int
@@ -48,8 +46,6 @@ func Load() *Config {
 		JWTSecret:                 getEnv("JWT_SECRET", "change-me-in-production"),
 		JWTAccessExpiry:           getDurationEnv("JWT_ACCESS_EXPIRY", 15*time.Minute),
 		JWTRefreshExpiry:          getDurationEnv("JWT_REFRESH_EXPIRY", 168*time.Hour),
-		ResendAPIKey:              getEnv("RESEND_API_KEY", ""),
-		ResendFromEmail:           getEnv("RESEND_FROM_EMAIL", "auth@yourdomain.com"),
 		AllowedOrigins:            getEnv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"),
 		OTPExpiryMinutes:          getIntEnv("OTP_EXPIRY_MINUTES", 10),
 		OTPMaxAttempts:            getIntEnv("OTP_MAX_ATTEMPTS", 3),

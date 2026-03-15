@@ -40,16 +40,6 @@ spec:
             secretKeyRef:
               name: authservice-secrets
               key: jwt-secret
-        - name: RESEND_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: authservice-secrets
-              key: resend-api-key
-        - name: RESEND_FROM_EMAIL
-          valueFrom:
-            secretKeyRef:
-              name: authservice-secrets
-              key: resend-from-email
         - name: ALLOWED_ORIGINS
           value: "https://libri.institutoitinerante.com.br,https://biblioteca.institutoitinerante.com.br,https://nitro.institutoitinerante.com.br,https://focus-hub.institutoitinerante.com.br,https://customers.institutoitinerante.com.br,https://catalog.institutoitinerante.com.br,https://auth.institutoitinerante.com.br"
         - name: JWT_ACCESS_EXPIRY
