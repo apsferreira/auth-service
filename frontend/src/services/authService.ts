@@ -1,6 +1,10 @@
 import api from './api'
 import type { AuthResponse, OTPResponse, User, AuthEventsResponse } from '@/types/auth'
 
+export interface GoogleAuthURLResponse {
+  url: string
+}
+
 export const authService = {
   async requestOTP(email: string): Promise<OTPResponse> {
     const { data } = await api.post<OTPResponse>('/auth/request-otp', { email })
@@ -37,6 +41,13 @@ export const authService = {
 
   async getEvents(params?: { event_type?: string; email?: string; limit?: number; offset?: number }): Promise<AuthEventsResponse> {
     const { data } = await api.get<AuthEventsResponse>('/admin/events', { params })
+    return data
+  },
+
+  async getGoogleAuthURL(redirectUri: string): Promise<GoogleAuthURLResponse> {
+    const { data } = await api.get<GoogleAuthURLResponse>('/auth/google', {
+      params: { redirect_uri: redirectUri },
+    })
     return data
   },
 }

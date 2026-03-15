@@ -11,6 +11,8 @@ import ServicesPage from '@/pages/ServicesPage'
 import PermissionsPage from '@/pages/PermissionsPage'
 import RolesPage from '@/pages/RolesPage'
 import AuditPage from '@/pages/AuditPage'
+import ConsumerLoginPage from '@/pages/auth/ConsumerLoginPage'
+import TokenCallbackPage from '@/pages/auth/TokenCallbackPage'
 
 function App() {
   return (
@@ -18,7 +20,11 @@ function App() {
       <BrowserRouter>
         <AuthProvider>
           <Routes>
-            {/* Public */}
+            {/* Consumer-facing login (OTP + Google OAuth) — used by all IIT products */}
+            <Route path="/auth/login" element={<ConsumerLoginPage />} />
+            <Route path="/auth/callback" element={<TokenCallbackPage />} />
+
+            {/* Admin login */}
             <Route path="/login" element={<LoginPage />} />
 
             {/* Protected */}
