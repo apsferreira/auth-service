@@ -17,8 +17,9 @@ const (
 	exchangeName = "auth.events"
 	exchangeType = "topic"
 
-	RoutingKeyOTPRequested = "otp.requested"
-	RoutingKeyOTPVerified  = "otp.verified"
+	RoutingKeyOTPRequested         = "otp.requested"
+	RoutingKeyOTPVerified          = "otp.verified"
+	RoutingKeyCustomerRegistered   = "customer.registered"
 
 	maxRetries = 5
 )
@@ -29,6 +30,18 @@ type OTPRequestedEvent struct {
 	Email       string `json:"email"`
 	ServiceName string `json:"service_name"`
 	Channel     string `json:"channel"` // "email" | "telegram"
+}
+
+// CustomerRegisteredEvent is published after a successful login/register
+// so the customer-service can upsert the customer record.
+// Exchange: auth.events | Routing key: customer.registered
+type CustomerRegisteredEvent struct {
+	AuthUserID string `json:"auth_user_id"`
+	Email      string `json:"email"`
+	FullName   string `json:"full_name"`
+	Username   string `json:"username,omitempty"`
+	IsNew      bool   `json:"is_new"`
+	OccurredAt string `json:"occurred_at"`
 }
 
 // Publisher handles publishing events to the auth.events exchange.
@@ -94,6 +107,12 @@ func (p *Publisher) PublishOTPRequested(email, serviceName, channel string) erro
 		Channel:     channel,
 	}
 	return p.publish(RoutingKeyOTPRequested, event)
+}
+
+// PublishCustomerRegistered publishes a customer.registered event to the auth.events exchange.
+// customer-service consumes this to upsert the customer record after a successful login/register.
+func (p *Publisher) PublishCustomerRegistered(evt CustomerRegisteredEvent) error {
+	return p.publish(RoutingKeyCustomerRegistered, evt)
 }
 
 func (p *Publisher) publish(routingKey string, payload interface{}) error {

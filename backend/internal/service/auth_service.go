@@ -144,6 +144,9 @@ func (s *AuthService) VerifyOTP(email, code string) (*domain.AuthResponse, error
 		return nil, fmt.Errorf("user not found: %w", err)
 	}
 
+	// isNew is true when this is the user's first successful authentication
+	isNew := user.LastLoginAt == nil
+
 	_ = s.userRepo.UpdateLastLogin(user.ID)
 
 	roles, permissions, err := s.userRepo.GetUserRolesAndPermissions(user.ID)
@@ -170,6 +173,25 @@ func (s *AuthService) VerifyOTP(email, code string) (*domain.AuthResponse, error
 	}
 	if err := s.tokenRepo.Create(rt); err != nil {
 		return nil, fmt.Errorf("failed to store refresh token: %w", err)
+	}
+
+	// Publish CustomerRegisteredEvent — non-blocking, failure does not fail the login
+	if s.publisher != nil {
+		username := ""
+		if user.Username != nil {
+			username = *user.Username
+		}
+		evt := messaging.CustomerRegisteredEvent{
+			AuthUserID: user.ID.String(),
+			Email:      user.Email,
+			FullName:   user.FullName,
+			Username:   username,
+			IsNew:      isNew,
+			OccurredAt: time.Now().UTC().Format(time.RFC3339),
+		}
+		if err := s.publisher.PublishCustomerRegistered(evt); err != nil {
+			log.Printf("[auth] failed to publish CustomerRegisteredEvent for %s: %v", user.Email, err)
+		}
 	}
 
 	return &domain.AuthResponse{
@@ -404,6 +426,7 @@ func (s *AuthService) ProvisionUser(email, fullName string) (*domain.User, error
 // finds or creates the user, links the OAuth identity, and returns JWT tokens.
 func (s *AuthService) LoginWithGoogle(googleUser *GoogleUserInfo) (*domain.AuthResponse, error) {
 	var user *domain.User
+	isNew := false
 
 	// 1. Check if we already have an OAuth identity for this Google account
 	identity, err := s.oauthRepo.FindByProvider("google", googleUser.ID)
@@ -418,6 +441,7 @@ func (s *AuthService) LoginWithGoogle(googleUser *GoogleUserInfo) (*domain.AuthR
 		user, err = s.userRepo.FindByEmail(googleUser.Email)
 		if err == sql.ErrNoRows {
 			// 3. Brand new user — create account
+			isNew = true
 			if err := s.createGoogleUser(googleUser); err != nil {
 				return nil, fmt.Errorf("failed to create user: %w", err)
 			}
@@ -488,6 +512,25 @@ func (s *AuthService) LoginWithGoogle(googleUser *GoogleUserInfo) (*domain.AuthR
 	}
 	if err := s.tokenRepo.Create(rt); err != nil {
 		return nil, fmt.Errorf("failed to store refresh token: %w", err)
+	}
+
+	// Publish CustomerRegisteredEvent — non-blocking, failure does not fail the login
+	if s.publisher != nil {
+		username := ""
+		if user.Username != nil {
+			username = *user.Username
+		}
+		evt := messaging.CustomerRegisteredEvent{
+			AuthUserID: user.ID.String(),
+			Email:      user.Email,
+			FullName:   user.FullName,
+			Username:   username,
+			IsNew:      isNew,
+			OccurredAt: time.Now().UTC().Format(time.RFC3339),
+		}
+		if err := s.publisher.PublishCustomerRegistered(evt); err != nil {
+			log.Printf("[auth] failed to publish CustomerRegisteredEvent for %s: %v", user.Email, err)
+		}
 	}
 
 	return &domain.AuthResponse{
